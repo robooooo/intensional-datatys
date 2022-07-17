@@ -1036,4 +1036,3 @@ reverseNode f (Node3 s a b c) = Node3 s (f c) (f b) (f a)
 -- 	valid (Four a b c d) = valid a && valid b && valid c && valid d
 
 -- #endif
-

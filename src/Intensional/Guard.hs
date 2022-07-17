@@ -1,16 +1,17 @@
 module Intensional.Guard where
 
-import qualified GhcPlugins as GHC
-import Binary 
-import Data.Map (Map)
-import Data.Set (Set)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import qualified Data.IntSet as IntSet
-import qualified Data.IntMap as IntMap
+import           Binary
+import qualified Data.IntMap                   as IntMap
+import qualified Data.IntSet                   as IntSet
+import           Data.Map                       ( Map )
+import qualified Data.Map                      as Map
+import           Data.Set                       ( Set )
+import qualified Data.Set                      as Set
+import qualified GhcPlugins                    as GHC
 
-import Intensional.Types
-import Intensional.Constructors
+import           Data.Bifunctor                 ( second )
+import           Intensional.Constructors
+import           Intensional.Types
 
 -- data Named a = Named {toPair :: (GHC.Name, a)}
 --   deriving (Eq, Functor)
@@ -29,26 +30,26 @@ import Intensional.Constructors
 -- A set of simple inclusion constraints, i.e. k in X(d), grouped by X(d)
 newtype Guard
   = Guard
-      { 
+      {
         groups :: Map (RVar, GHC.Name) (GHC.UniqSet GHC.Name)
       }
   deriving (Eq)
 
 instance Semigroup Guard where
-  Guard g <> Guard g' = Guard (Map.unionWith GHC.unionUniqSets g g')
+    Guard g <> Guard g' = Guard (Map.unionWith GHC.unionUniqSets g g')
 
 instance Monoid Guard where
-  mempty = Guard mempty
+    mempty = Guard mempty
 
 instance GHC.Outputable Guard where
-  ppr = prpr GHC.ppr
+    ppr = prpr GHC.ppr
 
 isEmpty :: Guard -> Bool
 isEmpty (Guard g) = Map.null g
 
 toList :: Guard -> [(Int, GHC.Name, GHC.Name)]
 toList (Guard g) =
-  [ (x, d, k) | ((x,d), ks) <- Map.toList g, k <- GHC.nonDetEltsUniqSet ks ]
+    [ (x, d, k) | ((x, d), ks) <- Map.toList g, k <- GHC.nonDetEltsUniqSet ks ]
 
 fromList :: [(Int, GHC.Name, GHC.Name)] -> Guard
 fromList = foldMap (\(x, d, k) -> singleton [k] x d)
@@ -57,46 +58,55 @@ typedVars :: Guard -> Set (RVar, GHC.Name)
 typedVars (Guard g) = Map.keysSet g
 
 instance Binary Guard where
-  put_ bh = put_ bh . toList
-  get bh = fromList <$> get bh
+    put_ bh = put_ bh . toList
+    get bh = fromList <$> get bh
 
 instance Refined Guard where
-  domain (Guard g) = 
-      Set.foldl' (\acc (x,_) -> IntSet.insert x acc) mempty (Map.keysSet g)
+    domain (Guard g) =
+        Set.foldl' (\acc (x, _) -> IntSet.insert x acc) mempty (Map.keysSet g)
 
-  rename x y (Guard g) =
-    Guard (Map.foldrWithKey (\(z,d) ks m -> Map.insertWith GHC.unionUniqSets (if z == x then y else z, d) ks m) mempty g)
+    rename x y (Guard g) = Guard
+        (Map.foldrWithKey
+            (\(z, d) ks m -> Map.insertWith GHC.unionUniqSets
+                                            (if z == x then y else z, d)
+                                            ks
+                                            m
+            )
+            mempty
+            g
+        )
 
-  prpr m (Guard g) = GHC.pprWithCommas pprGuardAtom guardList
-    where
-    pprGuardAtom ((x,d), ks) = GHC.hsep [GHC.ppr ks, GHC.text "in", prpr m (Dom (Inj x d))]
-    guardList = fmap (\(x,y) -> (x, GHC.nonDetEltsUniqSet y)) (Map.toList g)
+    prpr m (Guard g) = GHC.pprWithCommas pprGuardAtom guardList
+      where
+        pprGuardAtom ((x, d), ks) =
+            GHC.hsep [GHC.ppr ks, GHC.text "in", prpr m (Dom (Inj x d))]
+        guardList = fmap (second GHC.nonDetEltsUniqSet) (Map.toList g)
 
 lookup :: RVar -> GHC.Name -> Guard -> Maybe (GHC.UniqSet GHC.Name)
-lookup x d (Guard g) = Map.lookup (x,d) g
+lookup x d (Guard g) = Map.lookup (x, d) g
 
 delete :: GHC.Name -> RVar -> GHC.Name -> Guard -> Guard
-delete k x d (Guard g) = Guard (Map.alter del (x,d) g)
+delete k x d (Guard g) = Guard (Map.alter del (x, d) g)
   where
     del Nothing = Nothing
     del (Just ks) =
-      let ks' = GHC.delOneFromUniqSet ks k
-      in if GHC.isEmptyUniqSet ks' then Nothing else Just ks'
+        let ks' = GHC.delOneFromUniqSet ks k
+        in  if GHC.isEmptyUniqSet ks' then Nothing else Just ks'
 
 deleteAll :: [GHC.Name] -> RVar -> GHC.Name -> Guard -> Guard
-deleteAll ms x d (Guard g) = Guard (Map.alter del (x,d) g)
+deleteAll ms x d (Guard g) = Guard (Map.alter del (x, d) g)
   where
     del Nothing = Nothing
     del (Just ks) =
-      let ks' = GHC.delListFromUniqSet ks ms
-      in if GHC.isEmptyUniqSet ks' then Nothing else Just ks'
+        let ks' = GHC.delListFromUniqSet ks ms
+        in  if GHC.isEmptyUniqSet ks' then Nothing else Just ks'
 
 -- A guard literal
 -- Ignorning possibly trivial guards (e.g. 1-constructor types has already
 -- happened in InferM.branch)
 singleton :: [GHC.Name] -> RVar -> GHC.Name -> Guard
 singleton ks x d =
-  Guard (Map.singleton (x, d) (GHC.addListToUniqSet mempty ks))
+    Guard (Map.singleton (x, d) (GHC.addListToUniqSet mempty ks))
 
 -- guardsFromList :: [GHC.Name] -> DataType GHC.Name -> Guard
 -- guardsFromList ks (Inj x d) = foldr (\k gs -> singleton k (Inj x d) <> gs) mempty ks

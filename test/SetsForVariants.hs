@@ -29,3 +29,6 @@ h (A,_) = 1
 h (_,B) = 2
 h (_,A) = 3
 h (B,_) = 4
+
+main :: IO () 
+main = return ()

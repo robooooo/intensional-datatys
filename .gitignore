@@ -10,3 +10,4 @@ benchmarks/
 profile.*
 *.hi
 *.o
+.vscode/

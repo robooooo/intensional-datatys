@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Main where
 
 import qualified Data.List as List
@@ -70,6 +71,7 @@ nnf' (Lit (NegAtom x)) = Lit (NegAtom x)
 dnf' = nnf2dnf . nnf'
 
 willNotCrash = dnf' (And (Lit (Atom 1)) (Lit (Atom 2)))
+
 willCrash = 
   dnf' (Imp (Lit (Atom 1)) 
             (And (Lit (Atom 2)) 

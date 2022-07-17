@@ -11,50 +11,48 @@
     Atomic constraints and sets of atomic constraints, represented as antichains.  Saturation and restriction. 
 -}
 module Intensional.Constraints
-  ( 
-    CInfo(..),
-    modInfo,
-    spanInfo,
-    Atomic,
-    Constraint (..),
-    ConstraintSet,
-    insert,
-    guardWith,
-    toList,
-    fromList,
-    isTriviallyUnsat,
-    unsats,
-    saturate,
-    cexs,
-    size,
-  )
-where
+    ( CInfo(..)
+    , modInfo
+    , spanInfo
+    , Atomic
+    , Constraint(..)
+    , ConstraintSet
+    , insert
+    , guardWith
+    , toList
+    , fromList
+    , isTriviallyUnsat
+    , unsats
+    , saturate
+    , cexs
+    , size
+    ) where
 
-import Binary
-import Data.Foldable
-import Control.Monad.State (State)
-import Data.Set (Set)
-import qualified Data.Set as Set
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import Data.IntMap (IntMap)
-import Data.HashMap.Strict (HashMap)
-import Data.IntSet (IntSet)
-import qualified Control.Monad.State as State
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
-import qualified Data.Maybe as Maybe
-import qualified GhcPlugins as GHC
-import qualified Control.Monad as Monad
+import           Binary
+import qualified Control.Monad                 as Monad
+import           Control.Monad.State            ( State )
+import qualified Control.Monad.State           as State
+import           Data.Foldable
+import           Data.HashMap.Strict            ( HashMap )
+import qualified Data.HashMap.Strict           as HashMap
+import           Data.IntMap                    ( IntMap )
+import qualified Data.IntMap                   as IntMap
+import           Data.IntSet                    ( IntSet )
+import qualified Data.IntSet                   as IntSet
+import           Data.Map.Strict                ( Map )
+import qualified Data.Map.Strict               as Map
+import qualified Data.Maybe                    as Maybe
+import           Data.Set                       ( Set )
+import qualified Data.Set                      as Set
+import qualified GhcPlugins                    as GHC
 
-import Intensional.Ubiq
-import Intensional.Types
-import Intensional.Constructors
-import Intensional.Guard (Guard)
-import qualified Intensional.Guard as Guard
+import           Intensional.Constructors
+import           Intensional.Guard              ( Guard )
+import qualified Intensional.Guard             as Guard
+import           Intensional.Types
+import           Intensional.Ubiq
 
-import Debug.Trace
+import           Debug.Trace
 
 
 {-| 
@@ -66,20 +64,19 @@ import Debug.Trace
     
     INV: CInfo does not determine equality of constraints.
 -}
-data CInfo =
-  CInfo {
-    prov :: GHC.Module,
-    sspn :: GHC.SrcSpan
-  }
-  deriving (Eq, Ord)
+data CInfo = CInfo
+    { prov :: GHC.Module
+    , sspn :: GHC.SrcSpan
+    }
+    deriving (Eq, Ord)
 
 instance GHC.Outputable CInfo where
-  ppr (CInfo _ sp) = GHC.ppr sp
+    ppr (CInfo _ sp) = GHC.ppr sp
 
 instance Binary CInfo where
-  put_ bh (CInfo m sp) = put_ bh m >> put_ bh sp 
-  get bh = Monad.liftM2 CInfo (get bh) (get bh)
-    
+    put_ bh (CInfo m sp) = put_ bh m >> put_ bh sp
+    get bh = Monad.liftM2 CInfo (get bh) (get bh)
+
 
 {-|
     The type of constraints @c@ of shape @guard c@ ? @left c@ ⊆ @right c@ that originated from the 
@@ -87,34 +84,42 @@ instance Binary CInfo where
 -}
 type Atomic = Constraint 'L 'R
 
-data Constraint l r
-  = Constraint
-      { left :: K l,
-        right :: K r,
-        guard :: Guard,
-        cinfo :: CInfo
-      }
+data Constraint l r = Constraint
+    { left  :: K l
+    , right :: K r
+    , guard :: Guard
+    , cinfo :: CInfo
+    }
 
 instance Eq (Constraint l r) where
   -- Disregard info in comparison
-  Constraint l r g _ == Constraint l' r' g' _ = l == l' && r == r' && g == g'
+    Constraint l r g _ == Constraint l' r' g' _ = l == l' && r == r' && g == g'
 
 instance GHC.Outputable (Constraint l r) where
-  ppr = prpr GHC.ppr
+    ppr = prpr GHC.ppr
 
 instance (Binary (K l), Binary (K r)) => Binary (Constraint l r) where
-  put_ bh (Constraint l r g ss) = put_ bh l >> put_ bh r >> put_ bh g >> put_ bh ss
-  get bh = Constraint <$> Binary.get bh <*> Binary.get bh <*> Binary.get bh <*> Binary.get bh
+    put_ bh (Constraint l r g ss) =
+        put_ bh l >> put_ bh r >> put_ bh g >> put_ bh ss
+    get bh =
+        Constraint
+            <$> Binary.get bh
+            <*> Binary.get bh
+            <*> Binary.get bh
+            <*> Binary.get bh
 
 instance Refined (Constraint l r) where
-  domain c = domain (left c) <> domain (right c) <> domain (guard c)
-  rename x y c =
-    c
-      { left = rename x y (left c),
-        right = rename x y (right c),
-        guard = rename x y (guard c)
-      }
-  prpr m a = prpr m (guard a) GHC.<+> GHC.char '?' GHC.<+> prpr m (left a) GHC.<+> GHC.text "<=" GHC.<+> prpr m (right a)
+    domain c = domain (left c) <> domain (right c) <> domain (guard c)
+    rename x y c = c { left  = rename x y (left c)
+                     , right = rename x y (right c)
+                     , guard = rename x y (guard c)
+                     }
+    prpr m a =
+        prpr m (guard a)
+            GHC.<+> GHC.char '?'
+            GHC.<+> prpr m (left a)
+            GHC.<+> GHC.text "<="
+            GHC.<+> prpr m (right a)
 
 modInfo :: Atomic -> GHC.Module
 modInfo = prov . cinfo
@@ -126,24 +131,21 @@ spanInfo = sspn . cinfo
     Given an atomic constraint @a@, @isTriviallyUnsat a@ just if @a@ is of the form G ? k in {}.
 -}
 isTriviallyUnsat :: Atomic -> Bool
-isTriviallyUnsat a =
-    case (Guard.isEmpty (guard a), left a, right a) of
-      (True, Con _ _, Set ks _) | GHC.isEmptyUniqSet ks -> True
-      (_,    _,       _       )                         -> False
+isTriviallyUnsat a = case (Guard.isEmpty (guard a), left a, right a) of
+    (True, Con _ _, Set ks _) | GHC.isEmptyUniqSet ks -> True
+    (_, _, _) -> False
 
 headVar :: Atomic -> Maybe (Int, GHC.Name)
-headVar a = 
-  case right a of
+headVar a = case right a of
     Dom (Inj x d) -> Just (x, d)
     Set _ _       -> Nothing
     _             -> error "Not possible!"
 
-bodyVars :: Atomic -> Set (Int, GHC.Name) 
+bodyVars :: Atomic -> Set (Int, GHC.Name)
 bodyVars a = gVars <> lVars
   where
     gVars = Guard.typedVars (guard a)
-    lVars = 
-      case left a of
+    lVars = case left a of
         Dom (Inj x d) -> Set.singleton (x, d)
         Con _ _       -> Set.empty
         _             -> error "Not possible!"
@@ -155,23 +157,24 @@ bodyVars a = gVars <> lVars
 -}
 impliedBy :: Atomic -> Atomic -> Bool
 impliedBy a a' =
-  left a == left a' && right a == right a' && guard a `Guard.impliedBy` guard a'
+    left a
+        ==                left a'
+        &&                right a
+        ==                right a'
+        &&                guard a
+        `Guard.impliedBy` guard a'
 
 {-|
     Given an atomic constraint @a@, @tautology a@ just if @a@ is satisfied in 
     every assignment.
 -}
 tautology :: Atomic -> Bool
-tautology a =
-  case left a of
-    Dom d ->
-      case right a of
+tautology a = case left a of
+    Dom d -> case right a of
         Dom d' -> d == d'
-        _ -> False
-    Con k _ ->
-      case right a of
-        Dom (Inj x d) ->
-          case Guard.lookup x d (guard a) of
+        _      -> False
+    Con k _ -> case right a of
+        Dom (Inj x d) -> case Guard.lookup x d (guard a) of
             Just ks -> GHC.elementOfUniqSet k ks
             Nothing -> False
         Set ks _ -> GHC.elementOfUniqSet k ks
@@ -188,63 +191,67 @@ tautology a =
 resolve :: CInfo -> Atomic -> Atomic -> Maybe Atomic
 resolve ci l r =
     -- simplify the the new constraint if it's body contains two literals
-    case (left newR, right newR) of
-      (Con k _, Set ks _) | GHC.elementOfUniqSet k ks -> Nothing
-      (Con _ _, Set _  s) | otherwise                 -> Just (newR { right = Set mempty s})
-      (_,       _       )                             -> Just newR
+                 case (left newR, right newR) of
+    (Con k _, Set ks _) | GHC.elementOfUniqSet k ks -> Nothing
+    (Con _ _, Set _ s) | otherwise -> Just (newR { right = Set mempty s })
+    (_, _)                         -> Just newR
   where
-    weaken x d y g = 
+    weaken x d y g =
       -- weaken x(d) in g to y(d)
-      case Guard.lookup x d g of
-        Just ms | ks <- GHC.nonDetEltsUniqSet ms -> 
-          Just (Guard.singleton ks y d <> Guard.deleteAll ks x d g)
+                     case Guard.lookup x d g of
+        Just ms | ks <- GHC.nonDetEltsUniqSet ms ->
+            Just (Guard.singleton ks y d <> Guard.deleteAll ks x d g)
         Nothing -> Nothing
     satisfy x d k g =
       -- satisfy x(d) in g by k
-      case Guard.lookup x d g of
+                      case Guard.lookup x d g of
         Just ks | k `GHC.elementOfUniqSet` ks -> Just (Guard.delete k x d g)
-        _                                     -> Nothing
-    mbNewGuard = 
+        _ -> Nothing
+    mbNewGuard =
       -- create a new guard by modifying the old one according to
       -- saturation and weakening (ignoring l's guard, for now)
-      case (left l, right l) of 
+                 case (left l, right l) of
         (Dom (Inj y _), Dom (Inj x d)) -> weaken x d y (guard r)
-        (Con k _,       Dom (Inj x d)) -> satisfy x d k (guard r)
-        (_,             _            ) -> Nothing
-    mbNewLeft = 
+        (Con k _      , Dom (Inj x d)) -> satisfy x d k (guard r)
+        (_            , _            ) -> Nothing
+    mbNewLeft =
       -- apply transitivity, or not (ignoring l's guard, for now)
-      case (right l, left r) of
+                case (right l, left r) of
         (Dom (Inj x d), Dom (Inj z d')) | z == x && d == d' -> Just (left l)
-        (_,             _            )                      -> Nothing
-    newR = 
+        (_, _) -> Nothing
+    newR =
       -- determine whether or not to attach a single copy of l's guards
-      case (mbNewGuard, mbNewLeft) of
-      (Just grd, Just lft) -> r { left = lft, guard = guard l <> grd, cinfo = ci }
-      (Just grd, Nothing ) -> r { guard = guard l <> grd, cinfo = ci }
-      (Nothing,  Just lft) -> r { left = lft, guard = guard l <> guard r, cinfo = ci }
-      (Nothing,  Nothing ) -> r
-      
+           case (mbNewGuard, mbNewLeft) of
+        (Just grd, Just lft) ->
+            r { left = lft, guard = guard l <> grd, cinfo = ci }
+        (Just grd, Nothing) -> r { guard = guard l <> grd, cinfo = ci }
+        (Nothing, Just lft) ->
+            r { left = lft, guard = guard l <> guard r, cinfo = ci }
+        (Nothing, Nothing) -> r
+
 -- We only use ConstraintSetF with Atomic so far, but it is worth making
 -- this structure clear to derive Foldable etc
 -- TODO: Remove these hashmaps in favour of IntMaps
-data ConstraintSetF a
-  = ConstraintSetF
-      { 
-        -- constraints of the form GS ? Y(d) <= Y(d)
-        -- represented as X -> (d -> (Y -> GS)) 
-        definiteVV :: IntMap (GHC.NameEnv (HashMap Int [a])),
-        -- constraints of the form GS ? k in X(d)
-        -- represented as X -> (d -> (k -> GS))
-        definiteKV :: IntMap (GHC.NameEnv (HashMap GHC.Name [a])),
-        -- constraints of the form G ? S1 <= {k1,...,km}
-        -- represented as a list
-        goal :: [a],
-        -- a reverse lookup to find all those constraints
-        -- that have a given sorted variable X(d) in front of
-        -- the head (i.e. eligible for saturation on the right)
-        revMap :: Map (Int, GHC.Name) [Atomic]
-      }
-  deriving (Eq, Functor, Foldable)
+data ConstraintSetF a = ConstraintSetF
+    {
+                            -- constraints of the form GS ? Y(d) <= Y(d)
+                            -- represented as X -> (d -> (Y -> GS)) 
+      definiteVV :: IntMap (GHC.NameEnv (HashMap Int [a]))
+    ,
+                            -- constraints of the form GS ? k in X(d)
+                            -- represented as X -> (d -> (k -> GS))
+      definiteKV :: IntMap (GHC.NameEnv (HashMap GHC.Name [a]))
+    ,
+                            -- constraints of the form G ? S1 <= {k1,...,km}
+                            -- represented as a list
+      goal       :: [a]
+    ,
+                            -- a reverse lookup to find all those constraints
+                            -- that have a given sorted variable X(d) in front of
+                            -- the head (i.e. eligible for saturation on the right)
+      revMap     :: Map (Int, GHC.Name) [Atomic]
+    }
+    deriving (Eq, Functor, Foldable)
 
 {-|
     The type of sets of constraints.  
@@ -271,7 +278,7 @@ data ConstraintSetF a
 type ConstraintSet = ConstraintSetF Atomic
 
 instance Foldable GHC.UniqFM where
-  foldr = GHC.foldUFM 
+    foldr = GHC.foldUFM
 
 {-|
     Given a list of atomic constraints @cs@, @fromList cs@ is
@@ -281,46 +288,42 @@ fromList :: [Atomic] -> ConstraintSet
 fromList = foldr insert empty
 
 instance Semigroup ConstraintSet where
-  cs <> ds = foldr insert ds cs
+    cs <> ds = foldr insert ds cs
 
 instance Monoid ConstraintSet where
-  mempty = empty
+    mempty = empty
 
 instance GHC.Outputable ConstraintSet where
-  ppr = prpr GHC.ppr
+    ppr = prpr GHC.ppr
 
 instance Binary ConstraintSet where
-  put_ bh = put_ bh . toList
-  get bh = fromList <$> get bh
+    put_ bh = put_ bh . toList
+    get bh = fromList <$> get bh
 
 instance Refined ConstraintSet where
-  domain = foldMap domain
-  rename x y = 
-    -- this may create non-reduced constraint sets
-    foldl' (\ds a -> unsafeInsert (rename x y a) ds) empty
-  prpr m = foldr ((GHC.$$) . prpr m) GHC.empty
+    domain = foldMap domain
+    rename x y =
+      -- this may create non-reduced constraint sets
+        foldl' (\ds a -> unsafeInsert (rename x y a) ds) empty
+    prpr m = foldr ((GHC.$$) . prpr m) GHC.empty
 
 
 {-|
     @empty@ is the empty constraint set
 -}
 empty :: ConstraintSet
-empty =
-  ConstraintSetF
-    { 
-      definiteVV = mempty,
-      definiteKV = mempty,
-      goal = [],
-      revMap = mempty
-    }
+empty = ConstraintSetF { definiteVV = mempty
+                       , definiteKV = mempty
+                       , goal       = []
+                       , revMap     = mempty
+                       }
 
 {-|
     Given a constraint set @cs@, @unsats cs@ is the constraint set 
     consisting of just those trivially unsatisfiable constraints in @cs@.
 -}
 unsats :: ConstraintSet -> ConstraintSet
-unsats cs = 
-  mempty { goal = filter isTriviallyUnsat (goal cs) }
+unsats cs = mempty { goal = filter isTriviallyUnsat (goal cs) }
 
 {-| 
     When @cs@ is a constraint set, @size cs@ is its cardinality.
@@ -336,23 +339,35 @@ size = foldl' (\sz _ -> 1 + sz) 0
     Note: @unsafeInsert a cs@ may not be reduced even if @cs@ is.
 -}
 unsafeInsert :: Atomic -> ConstraintSet -> ConstraintSet
-unsafeInsert a cs =
-    fwd { revMap = Set.foldl' (\m (x,d) -> Map.insertWith (++) (x,d) [a] m) (revMap fwd) (bodyVars a) }
+unsafeInsert a cs = fwd
+    { revMap = Set.foldl' (\m (x, d) -> Map.insertWith (++) (x, d) [a] m)
+                          (revMap fwd)
+                          (bodyVars a)
+    }
   where
-    fwd = 
-      case (left a, right a) of
+    fwd = case (left a, right a) of
         (Dom (Inj x _), Dom (Inj y yd)) ->
-          let ne = IntMap.findWithDefault mempty y (definiteVV cs)
-              hm = GHC.lookupWithDefaultUFM ne mempty yd
-              as = HashMap.findWithDefault [] x hm
-          in cs {definiteVV = IntMap.insert y (GHC.addToUFM ne yd (HashMap.insert x (a : as) hm)) (definiteVV cs)}
+            let ne = IntMap.findWithDefault mempty y (definiteVV cs)
+                hm = GHC.lookupWithDefaultUFM ne mempty yd
+                as = HashMap.findWithDefault [] x hm
+            in  cs
+                    { definiteVV = IntMap.insert
+                        y
+                        (GHC.addToUFM ne yd (HashMap.insert x (a : as) hm))
+                        (definiteVV cs)
+                    }
         (Con k _, Dom (Inj y yd)) ->
-          let ne = IntMap.findWithDefault mempty y (definiteKV cs)
-              hm = GHC.lookupWithDefaultUFM ne mempty yd
-              as = HashMap.findWithDefault [] k hm
-          in cs {definiteKV = IntMap.insert y (GHC.addToUFM ne yd (HashMap.insert k (a : as) hm)) (definiteKV cs)}
-        (_, Set _ _) -> cs {goal = a : goal cs}
-        (_, _) -> cs
+            let ne = IntMap.findWithDefault mempty y (definiteKV cs)
+                hm = GHC.lookupWithDefaultUFM ne mempty yd
+                as = HashMap.findWithDefault [] k hm
+            in  cs
+                    { definiteKV = IntMap.insert
+                        y
+                        (GHC.addToUFM ne yd (HashMap.insert k (a : as) hm))
+                        (definiteKV cs)
+                    }
+        (_, Set _ _) -> cs { goal = a : goal cs }
+        (_, _      ) -> cs
 
 {-| 
     When @a@ is an atomic constraint and @cs@ is a constraint antichain 
@@ -363,28 +378,45 @@ unsafeInsert a cs =
         by inserting @a@ into @cs@. Note: @ds@ may be smaller than @cs@.
 -}
 insert' :: Atomic -> ConstraintSet -> Maybe ConstraintSet
-insert' a cs | not (tautology a) =
-    case mbFwd of
-      Just fwd -> Just $ fwd { revMap = Set.foldl' (\m (x,d) -> Map.insertWith (++) (x,d) [a] m) (revMap fwd) (bodyVars a) }
-      Nothing -> Nothing
+insert' a cs | not (tautology a) = case mbFwd of
+    Just fwd -> Just $ fwd
+        { revMap = Set.foldl'
+                       (\m (x, d) -> Map.insertWith (++) (x, d) [a] m)
+                       (revMap fwd)
+                       (bodyVars a)
+        }
+    Nothing -> Nothing
   where
-    mbFwd = 
-      case (left a, right a) of
+    mbFwd = case (left a, right a) of
         (Dom (Inj x _), Dom (Inj y yd)) ->
-          let ne = IntMap.findWithDefault mempty y (definiteVV cs)
-              hm = GHC.lookupWithDefaultUFM ne mempty yd
-              as = HashMap.findWithDefault [] x hm
-          in fmap (\as' -> cs {definiteVV = IntMap.insert y (GHC.addToUFM ne yd (HashMap.insert x as' hm)) (definiteVV cs)}) (maintain as)
+            let ne = IntMap.findWithDefault mempty y (definiteVV cs)
+                hm = GHC.lookupWithDefaultUFM ne mempty yd
+                as = HashMap.findWithDefault [] x hm
+            in  fmap
+                    (\as' -> cs
+                        { definiteVV = IntMap.insert
+                            y
+                            (GHC.addToUFM ne yd (HashMap.insert x as' hm))
+                            (definiteVV cs)
+                        }
+                    )
+                    (maintain as)
         (Con k _, Dom (Inj y yd)) ->
-          let ne = IntMap.findWithDefault mempty y (definiteKV cs)
-              hm = GHC.lookupWithDefaultUFM ne mempty yd
-              as = HashMap.findWithDefault [] k hm
-          in fmap (\as' -> cs {definiteKV = IntMap.insert y (GHC.addToUFM ne yd (HashMap.insert k as' hm)) (definiteKV cs)}) (maintain as)
-        (_, Set _ _) ->
-          fmap (\as' -> cs {goal = as'}) (maintain (goal cs))
-        (_, _) -> Nothing -- Ignore constraints concerning base types
-    maintain ds =
-      if any (a `impliedBy`) ds then Nothing else Just (a : ds)
+            let ne = IntMap.findWithDefault mempty y (definiteKV cs)
+                hm = GHC.lookupWithDefaultUFM ne mempty yd
+                as = HashMap.findWithDefault [] k hm
+            in  fmap
+                    (\as' -> cs
+                        { definiteKV = IntMap.insert
+                            y
+                            (GHC.addToUFM ne yd (HashMap.insert k as' hm))
+                            (definiteKV cs)
+                        }
+                    )
+                    (maintain as)
+        (_, Set _ _) -> fmap (\as' -> cs { goal = as' }) (maintain (goal cs))
+        (_, _      ) -> Nothing -- Ignore constraints concerning base types
+    maintain ds = if any (a `impliedBy`) ds then Nothing else Just (a : ds)
 insert' _ _ = Nothing
 
 {-| 
@@ -404,8 +436,7 @@ insert a cs = Maybe.fromMaybe cs (insert' a cs)
     of every constraint.
 -}
 guardWith :: Guard -> ConstraintSet -> ConstraintSet
-guardWith g =
-  foldl' (\ds a -> insert (a { guard = g <> guard a }) ds) mempty
+guardWith g = foldl' (\ds a -> insert (a { guard = g <> guard a }) ds) mempty
 
 {-|
     When @iface@ is a set of interface variables and @ci@ is the current ctx 
@@ -413,13 +444,19 @@ guardWith g =
     obtained from @cs@ by saturation and restriction to @iface@.
 -}
 saturate :: CInfo -> IntSet -> ConstraintSet -> ConstraintSet
-saturate ci iface cs  = 
-    es
+saturate ci iface cs = es
   where
-    ls = foldl' (\ms c -> if eligible iface c then unsafeInsert c ms else ms) mempty cs
+    ls = foldl'
+        (\ms c -> if eligible iface c then unsafeInsert c ms else ms)
+        mempty
+        cs
     ds = snd $ State.execState (fix ci iface) (ls, cs)
     -- doing foldl with insert here will guarantee the result is an antichain
-    es = foldl' (\fs a -> if domain a `IntSet.isSubsetOf` iface then insert a fs else fs) mempty ds
+    es = foldl'
+        (\fs a -> if domain a `IntSet.isSubsetOf` iface then insert a fs else fs
+        )
+        mempty
+        ds
 
 
 {-|
@@ -431,17 +468,19 @@ saturate ci iface cs  =
     resolution step.)
 -}
 eligible :: IntSet -> Atomic -> Bool
-eligible exts c = 
-      domain (guard c) `IntSet.isSubsetOf` exts  
-        && domain (left c) `IntSet.isSubsetOf` exts
-        && not (domain (right c) `IntSet.isSubsetOf` exts)
+eligible exts c =
+    domain (guard c)
+        `IntSet.isSubsetOf` exts
+        &&                  domain (left c)
+        `IntSet.isSubsetOf` exts
+        &&                  not (domain (right c) `IntSet.isSubsetOf` exts)
 
 {-|
     Given some context @ci@ and constraints @cs@ attempt to build
     a model of @cs@.  @cexs ci cs@ is the set of 
     trivially unsatisfiable constrants obtained from the candidate model.
 -}
-cexs :: CInfo -> ConstraintSet -> ConstraintSet 
+cexs :: CInfo -> ConstraintSet -> ConstraintSet
 cexs ci = saturate ci mempty
 
 {-| 
@@ -452,11 +491,11 @@ cexs ci = saturate ci mempty
     in which @ls@ is empty and @rs'@ is the saturation of @rs@.
 -}
 fix :: CInfo -> IntSet -> State (ConstraintSet, ConstraintSet) ()
-fix ci exts =
-  do  (ls, rs) <- State.get
-      Monad.when debugging $ 
-        traceM ("#ls = " ++ show (size ls) ++ ", #rs = " ++ show (size rs))
-      Monad.unless (null ls) $ saturate1 ci exts >> fix ci exts
+fix ci exts = do
+    (ls, rs) <- State.get
+    Monad.when debugging $ traceM
+        ("#ls = " ++ show (size ls) ++ ", #rs = " ++ show (size rs))
+    Monad.unless (null ls) $ saturate1 ci exts >> fix ci exts
 
 {-| 
      When @exts@ is a set of interface variables and @ci@ is the current ctx
@@ -471,28 +510,27 @@ fix ci exts =
           on the left with each clauses from @ls@ once.
 -}
 saturate1 :: CInfo -> IntSet -> State (ConstraintSet, ConstraintSet) ()
-saturate1 ci exts =
-    do  (ls, rs) <- State.get
-        State.put (mempty, rs)
-        Monad.forM_ ls $ \l ->
-          do  -- We immediately get the current state to allow
-              -- for two left constraints to be applied to the
-              -- same right constraint
-              rs' <- State.gets snd
-              -- This is guaranteed by varsAllExts
-              case headVar l of
-                Nothing -> error "impossible"
-                Just (x,d) -> 
-                  Monad.forM_ (Map.findWithDefault [] (x,d) $ revMap rs') $ \r -> 
-                      addResolvant (resolve ci l r)
+saturate1 ci exts = do
+    (ls, rs) <- State.get
+    State.put (mempty, rs)
+    Monad.forM_ ls $ \l -> do  -- We immediately get the current state to allow
+          -- for two left constraints to be applied to the
+          -- same right constraint
+        rs' <- State.gets snd
+        -- This is guaranteed by varsAllExts
+        case headVar l of
+            Nothing -> error "impossible"
+            Just (x, d) ->
+                Monad.forM_ (Map.findWithDefault [] (x, d) $ revMap rs')
+                    $ \r -> addResolvant (resolve ci l r)
   where
     addResolvant Nothing  = return ()
-    addResolvant (Just r) =
-      do  (ls, rs) <- State.get
-          case insert' r rs of
+    addResolvant (Just r) = do
+        (ls, rs) <- State.get
+        case insert' r rs of
             Nothing -> return ()
-            Just rs' -> 
+            Just rs' ->
               -- Insert the new constraint into ls only if it is a 
               -- unit clause modulo externals.
-              State.put (if eligible exts r then insert r ls else ls, rs')
+                State.put (if eligible exts r then insert r ls else ls, rs')
 

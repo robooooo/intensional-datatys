@@ -3,27 +3,30 @@
 {-# LANGUAGE LambdaCase #-}
 
 module Intensional.Types
-  ( RVar,
-    Domain,
-    Refined (..),
-    DataType (..),
-    Type,
-    TypeGen (..),
+    ( RVar
+    , Domain
+    , Refined(..)
+    , DataType(..)
+    , Type
+    , TypeGen(..)
+    ,
     -- inj,
-    decompType,
-    subTyVar,
-    tyconOf,
-  )
-where
+      decompType
+    , subTyVar
+    , tyconOf
+    ) where
 
-import Binary
-import Data.Bifunctor
-import Data.Hashable
-import qualified Data.IntSet as I
-import Data.Map (Map)
-import GHC.Generics hiding (prec)
-import GhcPlugins hiding ((<>), Expr (..), Type)
-import IfaceType
+import           Binary
+import           Data.Bifunctor
+import           Data.Hashable
+import qualified Data.IntSet                   as I
+import           Data.Map                       ( Map )
+import           GHC.Generics            hiding ( prec )
+import           GhcPlugins              hiding ( (<>)
+                                                , Expr(..)
+                                                , Type
+                                                )
+import           IfaceType
 
 type RVar = Int
 
@@ -36,9 +39,9 @@ class Refined t where
   prpr   :: (RVar -> SDoc) -> t -> SDoc
 
 instance Refined b => Refined (Map a b) where
-  domain = foldMap domain
-  rename x y = fmap (rename x y)
-  prpr m = foldr (($$) . prpr m) empty
+    domain = foldMap domain
+    rename x y = fmap (rename x y)
+    prpr m = foldr (($$) . prpr m) empty
 
 -- A datatype identifier
 -- d is TyCon, IfaceTyCon or Name
@@ -50,26 +53,24 @@ data DataType d
 instance Hashable d => Hashable (DataType d)
 
 instance Outputable d => Outputable (DataType d) where
-  ppr = prpr ppr 
+    ppr = prpr ppr
 
 instance Binary d => Binary (DataType d) where
-  put_ bh (Base d) = put_ bh False >> put_ bh d
-  put_ bh (Inj x d) =  put_ bh True >> put_ bh x >> put_ bh d
-  get bh =
-    get bh >>= \case
-      False -> Base <$> get bh
-      True -> Inj <$> get bh <*> get bh
+    put_ bh (Base d ) = put_ bh False >> put_ bh d
+    put_ bh (Inj x d) = put_ bh True >> put_ bh x >> put_ bh d
+    get bh = get bh >>= \case
+        False -> Base <$> get bh
+        True  -> Inj <$> get bh <*> get bh
 
 instance Outputable d => Refined (DataType d) where
-  domain (Base _) = I.empty
-  domain (Inj x _) = I.singleton x
+    domain (Base _ ) = I.empty
+    domain (Inj x _) = I.singleton x
 
-  rename x y (Inj z d)
-    | x == z = Inj y d
-  rename _ _ d = d
+    rename x y (Inj z d) | x == z = Inj y d
+    rename _ _ d                  = d
 
-  prpr _ (Base d) = ppr d
-  prpr m (Inj x d) = hcat [text "inj_", m x] <+> ppr d
+    prpr _ (Base d ) = ppr d
+    prpr m (Inj x d) = hcat [text "inj_", m x] <+> ppr d
 
 -- Check if a core datatype contains covariant arguments
 -- covariant :: TyCon -> Bool
@@ -87,7 +88,7 @@ instance Outputable d => Refined (DataType d) where
 
 -- Get the tycon from a datatype
 tyconOf :: DataType d -> d
-tyconOf (Base d) = d
+tyconOf (Base d ) = d
 tyconOf (Inj _ d) = d
 
 type Type = TypeGen TyCon
@@ -104,47 +105,49 @@ data TypeGen d
 
 -- Clone of a Outputable Core.Type
 instance Outputable d => Outputable (TypeGen d) where
-  ppr = prpr ppr
-      
-instance Binary d => Binary (TypeGen d) where
-  put_ bh (Var a) = put_ bh (0 :: Int) >> put_ bh a
-  put_ bh (App a b) = put_ bh (1 :: Int) >> put_ bh a >> put_ bh b
-  put_ bh (Data d as) = put_ bh (2 :: Int) >> put_ bh d >> put_ bh as
-  put_ bh (a :=> b) = put_ bh (3 :: Int) >> put_ bh a >> put_ bh b
-  put_ bh (Lit l) = put_ bh (4 :: Int) >> put_ bh l
-  put_ bh Ambiguous = put_ bh (5 :: Int)
+    ppr = prpr ppr
 
-  get bh = do
-    n <- get bh
-    case n :: Int of
-      0 -> Var <$> get bh
-      1 -> App <$> get bh <*> get bh
-      2 -> Data <$> get bh <*> get bh
-      3 -> (:=>) <$> get bh <*> get bh
-      4 -> Lit <$> get bh
-      5 -> return Ambiguous
-      _ -> pprPanic "Invalid binary file!" $ ppr n
+instance Binary d => Binary (TypeGen d) where
+    put_ bh (Var a      ) = put_ bh (0 :: Int) >> put_ bh a
+    put_ bh (App  a   b ) = put_ bh (1 :: Int) >> put_ bh a >> put_ bh b
+    put_ bh (Data d   as) = put_ bh (2 :: Int) >> put_ bh d >> put_ bh as
+    put_ bh (a    :=> b ) = put_ bh (3 :: Int) >> put_ bh a >> put_ bh b
+    put_ bh (Lit l      ) = put_ bh (4 :: Int) >> put_ bh l
+    put_ bh Ambiguous     = put_ bh (5 :: Int)
+
+    get bh = do
+        n <- get bh
+        case n :: Int of
+            0 -> Var <$> get bh
+            1 -> App <$> get bh <*> get bh
+            2 -> Data <$> get bh <*> get bh
+            3 -> (:=>) <$> get bh <*> get bh
+            4 -> Lit <$> get bh
+            5 -> return Ambiguous
+            _ -> pprPanic "Invalid binary file!" $ ppr n
 
 instance Outputable d => Refined (TypeGen d) where
-  domain (App a b) = domain a <> domain b
-  domain (Data d as) = domain d <> foldMap domain as
-  domain (a :=> b) = domain a <> domain b
-  domain _ = mempty
+    domain (App  a   b ) = domain a <> domain b
+    domain (Data d   as) = domain d <> foldMap domain as
+    domain (a    :=> b ) = domain a <> domain b
+    domain _             = mempty
 
-  rename x y (App a b) = App (rename x y a) (rename x y b)
-  rename x y (Data d as) = Data (rename x y d) (rename x y <$> as)
-  rename x y (a :=> b) = rename x y a :=> rename x y b
-  rename _ _ t = t
+    rename x y (App  a   b ) = App (rename x y a) (rename x y b)
+    rename x y (Data d   as) = Data (rename x y d) (rename x y <$> as)
+    rename x y (a    :=> b ) = rename x y a :=> rename x y b
+    rename _ _ t             = t
 
-  prpr m = pprTy topPrec
-    where
-      pprTy :: Outputable d => PprPrec -> TypeGen d -> SDoc
-      pprTy _ (Var a) = ppr a
-      pprTy prec (App t1 t2) = hang (pprTy prec t1) 2 (pprTy appPrec t2)
-      pprTy _ (Data d as) = hang (prpr m d) 2 $ sep [hcat [text "@", pprTy appPrec a] | a <- as]
-      pprTy prec (t1 :=> t2) = maybeParen prec funPrec $ sep [pprTy funPrec t1, arrow, pprTy prec t2]
-      pprTy _ (Lit l) = ppr l
-      pprTy _ Ambiguous = text "<?>"
+    prpr m = pprTy topPrec
+      where
+        pprTy :: Outputable d => PprPrec -> TypeGen d -> SDoc
+        pprTy _    (Var a     ) = ppr a
+        pprTy prec (App  t1 t2) = hang (pprTy prec t1) 2 (pprTy appPrec t2)
+        pprTy _    (Data d  as) = hang (prpr m d) 2
+            $ sep [ hcat [text "@", pprTy appPrec a] | a <- as ]
+        pprTy prec (t1 :=> t2) = maybeParen prec funPrec
+            $ sep [pprTy funPrec t1, arrow, pprTy prec t2]
+        pprTy _ (Lit l)   = ppr l
+        pprTy _ Ambiguous = text "<?>"
 
 -- Inject a sort into a refinement environment
 -- inj :: Int -> TypeGen d -> TypeGen d
@@ -159,22 +162,21 @@ instance Outputable d => Refined (TypeGen d) where
 -- Decompose a functions into its arguments and eventual return type
 decompType :: TypeGen d -> ([TypeGen d], TypeGen d)
 decompType (a :=> b) = first (++ [a]) (decompType b)
-decompType a = ([], a)
+decompType a         = ([], a)
 
 -- Type variable substitution
 subTyVar :: Outputable d => Name -> TypeGen d -> TypeGen d -> TypeGen d
-subTyVar a t (Var a')
-  | a == a' = t
-  | otherwise = Var a'
-subTyVar a t (App x y) = applyType (subTyVar a t x) (subTyVar a t y)
-subTyVar a t (Data d as) = Data d (subTyVar a t <$> as)
-subTyVar a t (x :=> y) = subTyVar a t x :=> subTyVar a t y
-subTyVar _ _ t = t
+subTyVar a t (Var a') | a == a'   = t
+                      | otherwise = Var a'
+subTyVar a t (App  x   y ) = applyType (subTyVar a t x) (subTyVar a t y)
+subTyVar a t (Data d   as) = Data d (subTyVar a t <$> as)
+subTyVar a t (x    :=> y ) = subTyVar a t x :=> subTyVar a t y
+subTyVar _ _ t             = t
 
 -- Unsaturated type application
 applyType :: Outputable d => TypeGen d -> TypeGen d -> TypeGen d
-applyType (Var a) t = App (Var a) t
-applyType (App a b) t = App (App a b) t
+applyType (Var a    ) t = App (Var a) t
+applyType (App  a b ) t = App (App a b) t
 applyType (Data d as) t = Data d (as ++ [t])
-applyType Ambiguous _ = Ambiguous
-applyType a b = pprPanic "The type is already saturated!" $ ppr (a, b)
+applyType Ambiguous   _ = Ambiguous
+applyType a           b = pprPanic "The type is already saturated!" $ ppr (a, b)
