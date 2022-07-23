@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Intensional.FromCore
     ( freshCoreType
     , freshCoreScheme

@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Intensional.Scheme
@@ -71,7 +70,7 @@ instance Outputable d => Refined (SchemeGen d) where
         varNames = if numVars > 3
             then [ char 'X' GhcPlugins.<> int n | n <- [1 .. numVars] ]
             else [ char c | c <- ['X', 'Y', 'Z'] ]
-        varMap = \x -> m IntMap.! x
+        varMap = (m IntMap.!)
           where
             m = IntMap.fromList $ zip (I.toAscList (boundvs scheme)) varNames
         pprTyQuant

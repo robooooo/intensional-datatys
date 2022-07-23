@@ -1,5 +1,3 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Intensional.InferCoreExpr
     ( inferProg
     ) where

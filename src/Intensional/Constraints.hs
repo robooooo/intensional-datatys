@@ -1,11 +1,5 @@
 {-# OPTIONS_HADDOCK ignore-exports #-}
 {-# OPTIONS_GHC -Wno-orphans #-} -- the Foldable instance for GHC.UniqFM is an orphan
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
 
 {-|
     Atomic constraints and sets of atomic constraints, represented as antichains.  Saturation and restriction. 
@@ -231,7 +225,6 @@ resolve ci l r =
 
 -- We only use ConstraintSetF with Atomic so far, but it is worth making
 -- this structure clear to derive Foldable etc
--- TODO: Remove these hashmaps in favour of IntMaps
 data ConstraintSetF a = ConstraintSetF
     {
                             -- constraints of the form GS ? Y(d) <= Y(d)
@@ -513,9 +506,10 @@ saturate1 :: CInfo -> IntSet -> State (ConstraintSet, ConstraintSet) ()
 saturate1 ci exts = do
     (ls, rs) <- State.get
     State.put (mempty, rs)
-    Monad.forM_ ls $ \l -> do  -- We immediately get the current state to allow
-          -- for two left constraints to be applied to the
-          -- same right constraint
+    Monad.forM_ ls $ \l -> do
+        -- We immediately get the current state to allow
+        -- for two left constraints to be applied to the
+        -- same right constraint
         rs' <- State.gets snd
         -- This is guaranteed by varsAllExts
         case headVar l of

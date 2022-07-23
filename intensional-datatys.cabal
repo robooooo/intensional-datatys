@@ -38,10 +38,11 @@ library
       Intensional.FromCore
       Intensional.InferCoreExpr
       Intensional.Ubiq
+      Intensional.Horn.Clause
   hs-source-dirs:
       src
   cpp-options:
-  -- -DDEBUG
+      -- -DDEBUG
   ghc-options:
       -Wall
       -Wcompat
@@ -52,6 +53,7 @@ library
   build-depends:
         base >=4 && <5
       , ghc >=8.6.0 && <=8.8.4
+      , microlens
       , extra >= 1.7.4 && < 1.8
       , containers >= 0.6.2 && < 0.7
       , unordered-containers >= 0.2.11 && < 0.3
@@ -62,6 +64,30 @@ library
       , filepath >= 1.4.2 && < 1.5
       , haskeline >= 0.7.5 && < 0.8
   default-language: Haskell2010
+  default-extensions:
+      FlexibleInstances
+      LambdaCase
+      MultiWayIf
+      OverloadedStrings
+      NamedFieldPuns
+      ScopedTypeVariables
+      TypeApplications
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
+      DerivingVia
+      StandaloneDeriving
+      ViewPatterns
+      RecordWildCards
+      BangPatterns
+      FlexibleContexts
+      DataKinds
+      TypeFamilies
+      KindSignatures
+      TypeOperators
+      GADTs
 
 test-suite test
   type: exitcode-stdio-1.0
@@ -75,10 +101,35 @@ test-suite test
       -fno-ignore-interface-pragmas 
       -fno-omit-interface-pragmas
       -fplugin Intensional
+    --   -fplugin-opt Intensional:Main
   build-depends:
       base >=4 && <5
     , intensional-datatys
   default-language: Haskell2010
+  default-extensions:
+      FlexibleInstances
+      LambdaCase
+      MultiWayIf
+      OverloadedStrings
+      NamedFieldPuns
+      ScopedTypeVariables
+      TypeApplications
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
+      DerivingVia
+      StandaloneDeriving
+      ViewPatterns
+      RecordWildCards
+      BangPatterns
+      FlexibleContexts
+      DataKinds
+      TypeFamilies
+      KindSignatures
+      TypeOperators
+      GADTs
 
 -- A library intended to be used from GHCI
 -- to manage benchmarks for the associated paper
@@ -91,6 +142,7 @@ library benchmark
       Benchmark
   build-depends:
       base >=4
+    , microlens ==0.4.12.0
     , aeson ==1.5.2.0
     , containers ==0.6.2.1
     , intensional-datatys
@@ -99,6 +151,30 @@ library benchmark
   hs-source-dirs:
       benchmark
   default-language: Haskell2010
+  default-extensions:
+      FlexibleInstances
+      LambdaCase
+      MultiWayIf
+      OverloadedStrings
+      NamedFieldPuns
+      ScopedTypeVariables
+      TypeApplications
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
+      DerivingVia
+      StandaloneDeriving
+      ViewPatterns
+      RecordWildCards
+      BangPatterns
+      FlexibleContexts
+      DataKinds
+      TypeFamilies
+      KindSignatures
+      TypeOperators
+      GADTs
 
 -- Requires ghc 8.8
 -- Needs manual tailoring to your
@@ -117,3 +193,27 @@ executable profile
       profile
   main-is: Profile.hs
   default-language: Haskell2010
+  default-extensions:
+      FlexibleInstances
+      LambdaCase
+      MultiWayIf
+      OverloadedStrings
+      NamedFieldPuns
+      ScopedTypeVariables
+      TypeApplications
+      DeriveFoldable
+      DeriveFunctor
+      DeriveGeneric
+      DeriveTraversable
+      DerivingStrategies
+      DerivingVia
+      StandaloneDeriving
+      ViewPatterns
+      RecordWildCards
+      BangPatterns
+      FlexibleContexts
+      DataKinds
+      TypeFamilies
+      KindSignatures
+      TypeOperators
+      GADTs

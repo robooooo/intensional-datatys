@@ -1,5 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
-
 module Intensional.InferM
     ( InferM
     , Context
@@ -181,7 +179,7 @@ isIneligible tc = do
         --  || strName == "Maybe"
 
 isTrivial :: TyCon -> Bool
-isTrivial tc = (== 1) (length (tyConDataCons tc))
+isTrivial tc = length (tyConDataCons tc) == 1
 
 
 

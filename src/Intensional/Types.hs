@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE LambdaCase #-}
-
 module Intensional.Types
     ( RVar
     , Domain
@@ -139,7 +135,7 @@ instance Outputable d => Refined (TypeGen d) where
 
     prpr m = pprTy topPrec
       where
-        pprTy :: Outputable d => PprPrec -> TypeGen d -> SDoc
+        pprTy :: PprPrec -> TypeGen d -> SDoc
         pprTy _    (Var a     ) = ppr a
         pprTy prec (App  t1 t2) = hang (pprTy prec t1) 2 (pprTy appPrec t2)
         pprTy _    (Data d  as) = hang (prpr m d) 2
