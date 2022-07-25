@@ -71,11 +71,17 @@ remove x (canonicize -> clauses) =
     isInHead (Horn head _) = Just x == head
     isInBody (Horn _ body) = x `elem` body
 
+
 -- | Saturate a conjunctive set of horn clauses under resolution.
 saturate :: Ord a => Set (Horn a) -> Set (Horn a)
-saturate clauses =
-    let vars = unions (map variables clauses)
-    in  unions $ map (`remove` clauses) vars
+saturate clauses = go (saturate clauses) clauses
+  where
+    go curr prev | curr == prev = prev
+                 | otherwise    = go (layer curr) curr
+
+    layer clauses' =
+        let vars = unions (map variables clauses')
+        in  unions $ map (`remove` clauses') vars
 
 -- | Restrict a set of horn clauses to those containing only certain variables.  
 restrict :: Ord a => Set a -> Set (Horn a) -> Set (Horn a)
