@@ -93,7 +93,7 @@ data Stats = Stats
 
 runInferM :: InferM a -> Module -> Context -> (a, [Atomic], Stats)
 runInferM run mod_name init_env =
-    let (a, s, _) = runRWS
+    let (a, s, w) = runRWS
             run
             (InferEnv mod_name init_env (UnhelpfulSpan (mkFastString "Nowhere"))
             )

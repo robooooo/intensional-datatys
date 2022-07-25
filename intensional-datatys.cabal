@@ -39,6 +39,8 @@ library
       Intensional.InferCoreExpr
       Intensional.Ubiq
       Intensional.Horn.Clause
+      Intensional.Horn.Constraint
+      Intensional.Horn.Example
   hs-source-dirs:
       src
   cpp-options:
