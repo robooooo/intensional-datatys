@@ -3,7 +3,6 @@ module Intensional.Horn.Clause where
 import           Control.Applicative            ( (<|>)
                                                 , Applicative(liftA2)
                                                 )
-import qualified Data.List                     as List
 import           Data.Set                hiding ( valid )
 import           Lens.Micro
 import           Lens.Micro.Extras
@@ -83,10 +82,6 @@ saturate clauses = go (saturate clauses) clauses
         let vars = unions (map variables clauses')
         in  unions $ map (`remove` clauses') vars
 
--- | Restrict a set of horn clauses to those containing only certain variables.  
-restrict :: Ord a => Set a -> Set (Horn a) -> Set (Horn a)
-restrict domain = filter isContained
-    where isContained clause = all (`member` domain) (variables clause)
 
 -- | Determine if a conjunctive set of horn clauses is unsatisfiable.
 -- TODO: This is done naively, not really utilising the special form of horn

@@ -227,21 +227,21 @@ resolve ci l r =
 -- this structure clear to derive Foldable etc
 data ConstraintSetF a = ConstraintSetF
     {
-                            -- constraints of the form GS ? Y(d) <= Y(d)
-                            -- represented as X -> (d -> (Y -> GS)) 
+    -- constraints of the form GS ? X(d) <= Y(d)
+    -- represented as X -> (d -> (Y -> GS)) 
       definiteVV :: IntMap (GHC.NameEnv (HashMap Int [a]))
     ,
-                            -- constraints of the form GS ? k in X(d)
-                            -- represented as X -> (d -> (k -> GS))
+    -- constraints of the form GS ? k in X(d)
+    -- represented as X -> (d -> (k -> GS))
       definiteKV :: IntMap (GHC.NameEnv (HashMap GHC.Name [a]))
     ,
-                            -- constraints of the form G ? S1 <= {k1,...,km}
-                            -- represented as a list
+    -- constraints of the form G ? S1 <= {k1,...,km}
+    -- represented as a list
       goal       :: [a]
     ,
-                            -- a reverse lookup to find all those constraints
-                            -- that have a given sorted variable X(d) in front of
-                            -- the head (i.e. eligible for saturation on the right)
+    -- a reverse lookup to find all those constraints
+    -- that have a given sorted variable X(d) in front of
+    -- the head (i.e. eligible for saturation on the right)
       revMap     :: Map (Int, GHC.Name) [Atomic]
     }
     deriving (Eq, Functor, Foldable)

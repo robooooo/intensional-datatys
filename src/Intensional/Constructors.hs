@@ -32,9 +32,9 @@ data Side = L | R
 -- the same constructor in different program
 -- locations are treated seperately.
 data K (s :: Side) where
-  Dom ::DataType Name -> K s
-  Con ::Name -> SrcSpan -> K 'L
-  Set ::UniqSet Name -> SrcSpan -> K 'R
+  Dom :: DataType Name -> K s
+  Con :: Name -> SrcSpan -> K 'L
+  Set :: UniqSet Name -> SrcSpan -> K 'R
 
 type ConL = K 'L
 type ConR = K 'R
