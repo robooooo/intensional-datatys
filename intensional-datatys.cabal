@@ -38,6 +38,7 @@ library
       Intensional.FromCore
       Intensional.InferCoreExpr
       Intensional.Ubiq
+      Intensional.Horn.Monad
       Intensional.Horn.Clause
       Intensional.Horn.Constraint
       Intensional.Horn.Example

@@ -34,6 +34,7 @@ data Side = L | R
 data K (s :: Side) where
   Dom :: DataType Name -> K s
   Con :: Name -> SrcSpan -> K 'L
+  -- | A literal set of constructors @{k1, k2, ...}@.
   Set :: UniqSet Name -> SrcSpan -> K 'R
 
 type ConL = K 'L

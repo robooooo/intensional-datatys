@@ -146,7 +146,9 @@ associate r = setLoc
     doAssoc
   where
     bindingNames = show $ map (occNameString . occName) (bindersOf r)
-    doAssoc      = do
+    
+    doAssoc :: InferM Context
+    doAssoc = do
         when debugging $ traceM ("[TRACE] Begin inferring: " ++ bindingNames)
         env       <- asks varEnv
         (ctx, cs) <- listen $ inferRec r

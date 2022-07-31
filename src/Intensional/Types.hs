@@ -89,14 +89,15 @@ tyconOf (Inj _ d) = d
 
 type Type = TypeGen TyCon
 
--- Monomorphic types parameterised by type constructors
+-- Monomorphic types parameterised by type constructors @d@.
 data TypeGen d
   = Var Name
   | App (TypeGen d) (TypeGen d)
   | Data (DataType d) [TypeGen d]
   | TypeGen d :=> TypeGen d
   | Lit IfaceTyLit
-  | Ambiguous -- Ambiguous hides higher-ranked types and casts
+  -- Ambiguous hides higher-ranked types and casts
+  | Ambiguous
   deriving (Functor, Foldable, Traversable)
 
 -- Clone of a Outputable Core.Type

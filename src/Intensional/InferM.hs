@@ -1,5 +1,6 @@
 module Intensional.InferM
     ( InferM
+    , BaseContext
     , Context
     , InferEnv(..)
     , Stats(..)
@@ -37,15 +38,19 @@ import           Intensional.Scheme
 import           Intensional.Types
 import           Intensional.Ubiq
 
-type InferM = RWS InferEnv ConstraintSet InferState
+type InferM = RWS (InferEnv ConstraintSet) ConstraintSet InferState
 
-type Context = M.Map Name Scheme
+-- | The type of contexts where type schemes have constraints of type @con@.
+type BaseContext con = M.Map Name (SchemeGen con TyCon)
+type Context = BaseContext ConstraintSet
 
-data InferEnv = InferEnv
+-- | Constraint types of type @con@.
+data InferEnv con = InferEnv
     { modName  :: Module
-    , -- The current module
-      varEnv   :: Context
-    , inferLoc :: SrcSpan -- The current location in the source text
+    -- The current module
+    , varEnv   :: BaseContext con
+    -- The current location in the source text
+    , inferLoc :: SrcSpan
     }
 
 data InferState = InferState
@@ -91,9 +96,10 @@ data Stats = Stats
     , getN :: Int
     }
 
-runInferM :: InferM a -> Module -> Context -> (a, [Atomic], Stats)
+runInferM
+    :: InferM a -> Module -> BaseContext ConstraintSet -> (a, [Atomic], Stats)
 runInferM run mod_name init_env =
-    let (a, s, w) = runRWS
+    let (a, s, _) = runRWS
             run
             (InferEnv mod_name init_env (UnhelpfulSpan (mkFastString "Nowhere"))
             )

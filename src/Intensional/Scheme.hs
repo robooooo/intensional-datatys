@@ -2,6 +2,8 @@
 
 module Intensional.Scheme
     ( Scheme
+    , HornScheme
+    , HornSet
     , SchemeGen(..)
     , pattern Forall
     , mono
@@ -11,38 +13,44 @@ module Intensional.Scheme
 import           Binary
 import qualified Data.IntMap                   as IntMap
 import qualified Data.IntSet                   as I
+import           Data.Set                       ( Set )
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
+import           Intensional.Horn.Clause        ( Horn )
+import           Intensional.Horn.Constraint    ( HornConstraint )
 import           Intensional.Types
 
-type Scheme = SchemeGen TyCon
+type Scheme = SchemeGen ConstraintSet TyCon
 
--- Constrained polymorphic types
-data SchemeGen d = Scheme
+type HornSet = Set HornConstraint
+type HornScheme = SchemeGen HornSet TyCon
+
+-- Constrained polymorphic types with type constructors of type @d@.
+-- Underlying constraints are parameterised by a type @con@.
+data SchemeGen con d = Scheme
     { tyvars      :: [Name]
     , boundvs     :: Domain
     , body        :: TypeGen d
-    , constraints :: ConstraintSet
+    , constraints :: con
     }
     deriving (Functor, Foldable, Traversable)
 
 {-# COMPLETE Forall #-}
-
-pattern Forall :: [Name] -> TypeGen d -> SchemeGen d
+pattern Forall :: Monoid con => [Name] -> TypeGen d -> SchemeGen con d
 pattern Forall as t <- Scheme as _ t _ where
     Forall as t = Scheme as mempty t mempty
 
-instance Outputable d => Outputable (SchemeGen d) where
+instance Outputable d => Outputable (SchemeGen ConstraintSet d) where
     ppr = prpr ppr
 
-instance Binary d => Binary (SchemeGen d) where
+instance (Binary con, Binary d) => Binary (SchemeGen con d) where
     put_ bh (Scheme as bs t cs) =
         put_ bh as >> put_ bh (I.toList bs) >> put_ bh t >> put_ bh cs
 
     get bh =
         Scheme <$> get bh <*> (I.fromList <$> get bh) <*> get bh <*> get bh
 
-instance Outputable d => Refined (SchemeGen d) where
+instance Outputable d => Refined (SchemeGen ConstraintSet d) where
     domain s =
         (domain (body s) Prelude.<> domain (constraints s)) I.\\ boundvs s
 
@@ -87,7 +95,7 @@ instance Outputable d => Refined (SchemeGen d) where
                 ]
 
 -- Demand a monomorphic type
-mono :: SchemeGen d -> TypeGen d
+mono :: Monoid con => SchemeGen con d -> TypeGen d
 mono (Forall [] t) = t
 mono _             = Ambiguous
 
