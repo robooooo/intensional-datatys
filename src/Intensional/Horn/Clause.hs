@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Intensional.Horn.Clause where
 
 import           Control.Applicative            ( (<|>)
@@ -6,6 +7,7 @@ import           Control.Applicative            ( (<|>)
 import           Data.Set                hiding ( valid )
 import           Lens.Micro
 import           Lens.Micro.Extras
+import           Lens.Micro.TH                  ( makeLensesFor )
 import           Prelude                 hiding ( filter
                                                 , foldr
                                                 , head
@@ -14,14 +16,14 @@ import           Prelude                 hiding ( filter
                                                 )
 
 -- | The type of horn clauses over variables of type a.
-data Horn a = Horn (Maybe a) (Set a)
+data Horn a = Horn
+    { hornHead :: Maybe a
+    , hornBody :: Set a
+    }
     deriving (Eq, Ord, Show)
-
-headL :: Lens (Horn a) (Horn a) (Maybe a) (Maybe a)
-headL = lens (\(Horn head _) -> head) (\(Horn _ body) new -> Horn new body)
-
-bodyL :: Lens (Horn a) (Horn a) (Set a) (Set a)
-bodyL = lens (\(Horn _ body) -> body) (\(Horn head _) new -> Horn head new)
+makeLensesFor 
+    [("hornHead", "_head"), ("hornBody", "_body")] 
+    ''Horn
 
 variables :: Ord a => Horn a -> Set a
 variables (Horn (Just guard) body) = guard `insert` body
@@ -35,6 +37,11 @@ isTrivial _                       = False
 -- | Remove trivial clauses from a set of horn clauses.
 canonicize :: Ord a => Set (Horn a) -> Set (Horn a)
 canonicize = filter (not . isTrivial)
+
+-- | Add a set of propositions to the body of a horn clause.
+-- In implication form, this corresponds to adding extra premises.
+addGuard :: Ord a => Set a -> Horn a -> Horn a
+addGuard extra = over _body (`union` extra)
 
 -- | Resolve two horn clauses over a given variable @x@.
 -- Will return @Nothing@ if there can be no resolution over these clauses, e.g. 
@@ -63,9 +70,9 @@ remove x (canonicize -> clauses) =
         inBody = filter isInBody clauses
         inNone = filter (liftA2 (&&) (not . isInHead) (not . isInBody)) clauses
     in  union inNone . fromList $ do
-            bases <- over bodyL (x `delete`) <$> toList inBody
-            extra <- view bodyL <$> toList inHead
-            return $ bases & bodyL %~ (`union` extra)
+            bases <- over _body (x `delete`) <$> toList inBody
+            extra <- view _body <$> toList inHead
+            return $ bases & _body %~ (`union` extra)
   where
     isInHead (Horn head _) = Just x == head
     isInBody (Horn _ body) = x `elem` body

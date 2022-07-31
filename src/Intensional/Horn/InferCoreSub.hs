@@ -6,22 +6,19 @@ import           Control.Monad.Extra
 import           Control.Monad.RWS.Strict
 import           Control.Monad.State            ( StateT )
 import qualified Control.Monad.State           as State
-import qualified CoreSyn                       as Core
-import           Data.Bifunctor                 ( Bifunctor(bimap) )
-import qualified Data.IntSet                   as I
-import qualified Data.Map                      as Map
 import           Debug.Trace
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
                                                 )
-import qualified Intensional.Constraints       as Constraints
+import           Intensional.FromCore           ( consInstArgs )
 import           Intensional.Guard
 import qualified Intensional.Guard             as Guard
+import           Intensional.Horn.Constraint    ( guardHornWith )
 import           Intensional.Horn.Monad
 import           Intensional.InferM             ( InferEnv(..) )
-import           Intensional.Scheme            as Scheme
 import           Intensional.Types
 import           Intensional.Ubiq
+import qualified Data.Set as Set
 
 {- |
     The type of subtype inference constraints that are accumulated
@@ -68,14 +65,13 @@ inferSubType t1 t2 = do
         -- Note how big it was for statistics
         -- TODO: return noteD $ length (nub $ map (\(_, _, _, d') -> getName d') ds)
         -- Emit a constraint for each one
-        forM_ ds $ \(gs, x', y', d') -> censor
-            (Constraints.guardWith gs)
-            (emitDD (Inj x' d') (Inj y' d'))
+        forM_ ds $ \(gs, x', y', d') ->
+            censor (guardHornWith gs) (emitDD (Inj x' d') (Inj y' d'))
 
     when debugging $ do
         src <- asks inferLoc
         traceM ("[TRACE] Starting subtpe inference at " ++ traceSpan src)
-        let sz = Constraints.size cs
+        let sz = Set.size cs
         traceM
             (  "[TRACE] The subtype proof at "
             ++ traceSpan src

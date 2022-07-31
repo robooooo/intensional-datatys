@@ -1,6 +1,8 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Intensional.Horn.Monad where
 
-import           Control.Monad.RWS
+import           Control.Monad.RWS.Strict
 import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import           Data.Set                       ( Set )
@@ -8,14 +10,12 @@ import qualified Data.Set                      as Set
 import           DataCon                        ( dataConName )
 import           GHC
 import           Intensional.Constraints
-import           Intensional.Constructors       ( ConL
-                                                , ConR
-                                                , K(..)
-                                                )
 import           Intensional.Horn.Clause
 import           Intensional.Horn.Constraint
 import           Intensional.InferM             ( BaseContext
                                                 , InferEnv(..)
+                                                , MonadFresh(..)
+                                                , MonadInfer
                                                 )
 import           Intensional.Scheme
 import           Intensional.Types
@@ -23,6 +23,11 @@ import           Intensional.Types
 
 
 type InferM = RWS (InferEnv HornSet) HornSet RVar
+
+instance MonadFresh InferM where
+    mfresh = fresh
+
+instance (MonadInfer HornSet) InferM
 
 type HornContext = BaseContext HornSet
 

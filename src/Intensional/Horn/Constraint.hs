@@ -3,24 +3,18 @@
 {-# LANGUAGE TupleSections #-}
 module Intensional.Horn.Constraint where
 import qualified Data.Map.Strict               as Map
-import           Data.Map.Strict                ( Map )
 import qualified Data.Set                      as Set
 import           Data.Set                       ( Set )
 import qualified GhcPlugins                    as GHC
-import           GhcPlugins                     ( nonDetEltsUniqSet )
+import           GhcPlugins                     ( UniqSet
+                                                , nonDetEltsUniqSet
+                                                )
 import           Intensional.Constraints
-import           Intensional.Constructors       ( K(..) )
+import           Intensional.Guard              ( Guard(groups) )
 import           Intensional.Horn.Clause
+import           Intensional.Scheme
 import           Intensional.Types
-
--- | The type of propositional atoms.
--- Pair of a constructor and a refinement variable.
-type AtomF a = (a, RVar)
-
-type Atom = AtomF GHC.Name
-
-data HornConstraint = HornConstraint CInfo (Horn Atom)
-    deriving (Eq, Ord)
+import           Lens.Micro
 
 -- | Intermediate representation of set expressions, used for @toHorn@.
 data SetExpr a
@@ -118,6 +112,20 @@ toHorn constructors (guards, lefts, rights) = case (lefts, rights) of
 --     mkHornImpl :: Atom -> [Atom] -> Horn Atom
 --     mkHornImpl head body = Horn (Just head) (Set.fromList body)
 
+guardHornWith :: Guard -> HornSet -> HornSet
+guardHornWith (groups -> g) = Set.map addConstraint
+  where
+    addConstraint :: HornConstraint -> HornConstraint
+    addConstraint = over _horn (addGuard guardProps)
+
+    guardProps :: Set Atom
+    guardProps = Map.foldlWithKey'
+        (\acc (x, _) ks -> Set.union (makeProp x ks) acc)
+        Set.empty
+        g
+
+    makeProp :: RVar -> UniqSet GHC.Name -> Set Atom
+    makeProp x ks = Set.map (, x) (Set.fromList $ nonDetEltsUniqSet ks)
 
 -- | Restrict a set of horn clauses to those containing only certain variables.  
 restrict :: Ord a => Set a -> Set (Horn a) -> Set (Horn a)

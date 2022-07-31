@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Intensional.Scheme
@@ -8,19 +9,40 @@ module Intensional.Scheme
     , pattern Forall
     , mono
     , Intensional.Scheme.unsats
+    , AtomF
+    , Atom
+    , HornConstraint(..)
+    , _cinfo
+    , _horn
     ) where
 
 import           Binary
 import qualified Data.IntMap                   as IntMap
 import qualified Data.IntSet                   as I
 import           Data.Set                       ( Set )
+import qualified GHC
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
 import           Intensional.Horn.Clause        ( Horn )
-import           Intensional.Horn.Constraint    ( HornConstraint )
 import           Intensional.Types
+import           Lens.Micro.TH                  ( makeLensesFor )
 
-type Scheme = SchemeGen ConstraintSet TyCon
+
+
+-- | The type of propositional atoms.
+-- Pair of a constructor and a refinement variable.
+type AtomF a = (a, RVar)
+
+type Atom = AtomF GHC.Name
+
+data HornConstraint = HornConstraint
+    { hornConInfo  :: CInfo
+    , hornConInner :: Horn Atom
+    }
+    deriving (Eq, Ord)
+makeLensesFor
+    [("hornConInfo", "_cinfo"), ("hornConInner", "_horn")]
+    ''HornConstraint
 
 type HornSet = Set HornConstraint
 type HornScheme = SchemeGen HornSet TyCon
@@ -34,6 +56,8 @@ data SchemeGen con d = Scheme
     , constraints :: con
     }
     deriving (Functor, Foldable, Traversable)
+
+type Scheme = SchemeGen ConstraintSet TyCon
 
 {-# COMPLETE Forall #-}
 pattern Forall :: Monoid con => [Name] -> TypeGen d -> SchemeGen con d

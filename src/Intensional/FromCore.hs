@@ -20,11 +20,11 @@ import           ToIface
 import qualified TyCoRep                       as Tcr
 
 -- A fresh monomorphic type
-freshCoreType :: Tcr.Type -> InferM Type
+freshCoreType :: MonadInfer con m => Tcr.Type -> m Type
 freshCoreType = fromCore Nothing
 
 -- A fresh polymorphic type
-freshCoreScheme :: Tcr.Type -> InferM Scheme
+freshCoreScheme :: MonadInfer con m => Tcr.Type -> m Scheme
 freshCoreScheme = fromCoreScheme Nothing
 
 -- The type of a constructor injected into a fresh refinement environment
@@ -39,10 +39,11 @@ fromCoreCons k = do
     fromCoreScheme (Just x) (dataConUserType k)
 
 -- The argument types of an instantiated constructor
-consInstArgs :: RVar -> [Type] -> DataCon -> InferM [Type]
+consInstArgs
+    :: (MonadReader (InferEnv con) m) => RVar -> [Type] -> DataCon -> m [Type]
 consInstArgs x as k = mapM fromCoreInst (dataConRepArgTys k)
   where
-    fromCoreInst :: Tcr.Type -> InferM Type
+    fromCoreInst :: (MonadReader (InferEnv con) m) => Tcr.Type -> m Type
     fromCoreInst (Tcr.TyVarTy a) =
         case lookup a (zip (dataConUnivTyVars k) as) of
             Nothing -> return (Var (getName a))
@@ -64,7 +65,7 @@ consInstArgs x as k = mapM fromCoreInst (dataConRepArgTys k)
     fromCoreInst _               = return Ambiguous
 
 -- Convert a monomorphic core type
-fromCore :: Maybe RVar -> Tcr.Type -> InferM Type
+fromCore :: MonadInfer con m => Maybe RVar -> Tcr.Type -> m Type
 fromCore _ (Tcr.TyVarTy a) = Var <$> getExternalName a
 fromCore f (Tcr.AppTy a b) = liftM2 App (fromCore f a) (fromCore f b)
 fromCore f (Tcr.TyConApp d as)
@@ -74,7 +75,7 @@ fromCore f (Tcr.TyConApp d as)
     | -- Instantiate type synonyms
       isClassTyCon d = return Ambiguous -- Disregard type class evidence
 fromCore Nothing (Tcr.TyConApp d as) = do
-    x <- fresh
+    x <- mfresh
     b <- isIneligible d
     if b
         then Data (Base d) <$> mapM (fromCore Nothing) as
@@ -89,7 +90,7 @@ fromCore _ (Tcr.LitTy l  ) = return $ Lit $ toIfaceTyLit l
 fromCore _ _               = return Ambiguous -- Higher-ranked or impredicative types, casts and coercions
 
 -- Convert a polymorphic core type
-fromCoreScheme :: Maybe RVar -> Tcr.Type -> InferM Scheme
+fromCoreScheme :: MonadInfer con m => Maybe RVar -> Tcr.Type -> m Scheme
 fromCoreScheme f (Tcr.ForAllTy b t) = do
     a      <- getExternalName (Tcr.binderVar b)
     scheme <- fromCoreScheme f t

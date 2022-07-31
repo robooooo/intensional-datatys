@@ -1,9 +1,12 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
 module Intensional.InferM
     ( InferM
     , BaseContext
     , Context
     , InferEnv(..)
     , Stats(..)
+    , MonadInfer
+    , MonadFresh(..)
     , runInferM
     , Intensional.InferM.saturate
     , branchAny
@@ -39,6 +42,16 @@ import           Intensional.Types
 import           Intensional.Ubiq
 
 type InferM = RWS (InferEnv ConstraintSet) ConstraintSet InferState
+
+class Monad m => MonadFresh m where
+    mfresh :: m RVar
+
+instance MonadFresh InferM where
+    mfresh = fresh
+
+-- | Generalise over both types of inference monads.
+class (MonadReader (InferEnv con) m, MonadFresh m) => MonadInfer con m
+instance (MonadInfer ConstraintSet) InferM
 
 -- | The type of contexts where type schemes have constraints of type @con@.
 type BaseContext con = M.Map Name (SchemeGen con TyCon)
@@ -159,7 +172,7 @@ cexs cs = do
     return $ Constraints.cexs (CInfo m src) cs
 
 -- Check if a core datatype is ineligible for refinement
-isIneligible :: TyCon -> InferM Bool
+isIneligible :: (MonadReader (InferEnv con) m) => TyCon -> m Bool
 isIneligible tc = do
     m <- asks modName
     return (not (homeOrBase m (getName tc)) || null (tyConDataCons tc))
@@ -256,7 +269,7 @@ setLoc l = local (\env -> env { inferLoc = l })
 
 -- Prepare name for interface
 -- Should be used before all type variables
-getExternalName :: NamedThing a => a -> InferM Name
+getExternalName :: (MonadInfer con m, NamedThing a) => a -> m Name
 getExternalName a = do
     let n = getName a
     mn <- asks modName
