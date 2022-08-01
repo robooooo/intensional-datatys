@@ -24,26 +24,25 @@ freshCoreType :: MonadInfer con m => Tcr.Type -> m Type
 freshCoreType = fromCore Nothing
 
 -- A fresh polymorphic type
-freshCoreScheme :: MonadInfer con m => Tcr.Type -> m Scheme
+freshCoreScheme :: MonadInfer con m => Tcr.Type -> m (SchemeGen con TyCon)
 freshCoreScheme = fromCoreScheme Nothing
 
 -- The type of a constructor injected into a fresh refinement environment
-fromCoreCons :: DataCon -> InferM Scheme
+fromCoreCons :: MonadInfer con m => DataCon -> m (SchemeGen con TyCon)
 fromCoreCons k = do
-    x <- fresh
+    x <- mfresh
     let d = dataConTyCon k
     b <- isIneligible d
     unless b $ do
         l <- asks inferLoc
-        emitKD k l (Inj x d)
+        memitKD k l (Inj x d)
     fromCoreScheme (Just x) (dataConUserType k)
 
 -- The argument types of an instantiated constructor
-consInstArgs
-    :: (MonadReader (InferEnv con) m) => RVar -> [Type] -> DataCon -> m [Type]
+consInstArgs :: MonadInfer con m => RVar -> [Type] -> DataCon -> m [Type]
 consInstArgs x as k = mapM fromCoreInst (dataConRepArgTys k)
   where
-    fromCoreInst :: (MonadReader (InferEnv con) m) => Tcr.Type -> m Type
+    fromCoreInst :: MonadInfer con m => Tcr.Type -> m Type
     fromCoreInst (Tcr.TyVarTy a) =
         case lookup a (zip (dataConUnivTyVars k) as) of
             Nothing -> return (Var (getName a))
@@ -90,7 +89,8 @@ fromCore _ (Tcr.LitTy l  ) = return $ Lit $ toIfaceTyLit l
 fromCore _ _               = return Ambiguous -- Higher-ranked or impredicative types, casts and coercions
 
 -- Convert a polymorphic core type
-fromCoreScheme :: MonadInfer con m => Maybe RVar -> Tcr.Type -> m Scheme
+fromCoreScheme
+    :: MonadInfer con m => Maybe RVar -> Tcr.Type -> m (SchemeGen con TyCon)
 fromCoreScheme f (Tcr.ForAllTy b t) = do
     a      <- getExternalName (Tcr.binderVar b)
     scheme <- fromCoreScheme f t
@@ -102,13 +102,14 @@ fromCoreScheme f (Tcr.FunTy a b) = do
 fromCoreScheme f t = Forall [] <$> fromCore f t
 
 -- Lookup constrained variable and emit its constraints
-getVar :: Var -> InferM Scheme
+getVar
+    :: (Refined con, Eq con, MonadInfer con m) => Var -> m (SchemeGen con TyCon)
 getVar v = asks (M.lookup (getName v) . varEnv) >>= \case
     Just scheme -> do
       -- Localise constraints
         fre_scheme <- foldM
             (\s x -> do
-                y <- fresh
+                y <- mfresh
                 return (rename x y s)
             )
             (scheme { boundvs = mempty })
@@ -122,9 +123,9 @@ getVar v = asks (M.lookup (getName v) . varEnv) >>= \case
         return var_scheme
 
 -- Maximise/minimise a library type, i.e. assert every constructor occurs in covariant positions
-maximise :: Bool -> Type -> InferM ()
+maximise :: MonadInfer con m => Bool -> Type -> m ()
 maximise True (Data (Inj x d) _) = do
     l <- asks inferLoc
-    mapM_ (\k -> emitKD k l (Inj x d)) $ tyConDataCons d
+    mapM_ (\k -> memitKD k l (Inj x d)) $ tyConDataCons d
 maximise b (x :=> y) = maximise (not b) x >> maximise b y
 maximise _ _         = return ()

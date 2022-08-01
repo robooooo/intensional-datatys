@@ -74,7 +74,9 @@ instance (Binary con, Binary d) => Binary (SchemeGen con d) where
     get bh =
         Scheme <$> get bh <*> (I.fromList <$> get bh) <*> get bh <*> get bh
 
-instance Outputable d => Refined (SchemeGen ConstraintSet d) where
+instance (Refined con, Eq con, Monoid con, Outputable d)
+        => Refined (SchemeGen con d) where
+
     domain s =
         (domain (body s) Prelude.<> domain (constraints s)) I.\\ boundvs s
 

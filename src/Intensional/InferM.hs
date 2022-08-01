@@ -5,7 +5,7 @@ module Intensional.InferM
     , Context
     , InferEnv(..)
     , Stats(..)
-    , MonadInfer
+    , MonadInfer(..)
     , MonadFresh(..)
     , runInferM
     , Intensional.InferM.saturate
@@ -46,12 +46,23 @@ type InferM = RWS (InferEnv ConstraintSet) ConstraintSet InferState
 class Monad m => MonadFresh m where
     mfresh :: m RVar
 
+-- | State component of @MonadInfer@. Because the two use differently shaped
+-- state types, this represents the common intersection of them.
+-- (Namely, creating fresh refinement variables).
+-- Should probably include debugging in future too?
 instance MonadFresh InferM where
     mfresh = fresh
 
 -- | Generalise over both types of inference monads.
-class (MonadReader (InferEnv con) m, MonadFresh m) => MonadInfer con m
-instance (MonadInfer ConstraintSet) InferM
+class (MonadWriter con m, MonadReader (InferEnv con) m, MonadFresh m) => MonadInfer con m where
+    memitDD :: DataType TyCon -> DataType TyCon -> m ()
+    memitKD :: DataCon -> SrcSpan -> DataType TyCon -> m ()
+    memitDK :: DataType TyCon -> [DataCon] -> SrcSpan -> m ()
+
+instance (MonadInfer ConstraintSet) InferM where
+    memitDD = emitDD
+    memitKD = emitKD
+    memitDK = emitDK
 
 -- | The type of contexts where type schemes have constraints of type @con@.
 type BaseContext con = M.Map Name (SchemeGen con TyCon)
@@ -172,7 +183,7 @@ cexs cs = do
     return $ Constraints.cexs (CInfo m src) cs
 
 -- Check if a core datatype is ineligible for refinement
-isIneligible :: (MonadReader (InferEnv con) m) => TyCon -> m Bool
+isIneligible :: MonadInfer con m => TyCon -> m Bool
 isIneligible tc = do
     m <- asks modName
     return (not (homeOrBase m (getName tc)) || null (tyConDataCons tc))

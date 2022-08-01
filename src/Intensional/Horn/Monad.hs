@@ -15,7 +15,7 @@ import           Intensional.Horn.Constraint
 import           Intensional.InferM             ( BaseContext
                                                 , InferEnv(..)
                                                 , MonadFresh(..)
-                                                , MonadInfer
+                                                , MonadInfer(..)
                                                 )
 import           Intensional.Scheme
 import           Intensional.Types
@@ -27,7 +27,10 @@ type InferM = RWS (InferEnv HornSet) HornSet RVar
 instance MonadFresh InferM where
     mfresh = fresh
 
-instance (MonadInfer HornSet) InferM
+instance (MonadInfer HornSet) InferM where
+    memitDD = emitDD
+    memitDK = emitDK
+    memitKD = emitKD
 
 type HornContext = BaseContext HornSet
 
