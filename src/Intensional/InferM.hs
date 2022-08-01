@@ -274,7 +274,7 @@ putVar n s = local (\env -> env { varEnv = M.insert n s (varEnv env) })
 putVars :: Context -> InferM a -> InferM a
 putVars ctx = local (\env -> env { varEnv = M.union ctx (varEnv env) })
 
--- Add source text location tick
+-- Add source text lo dcation tick
 setLoc :: SrcSpan -> InferM a -> InferM a
 setLoc l = local (\env -> env { inferLoc = l })
 

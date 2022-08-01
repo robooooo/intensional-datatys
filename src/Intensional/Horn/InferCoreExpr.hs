@@ -5,24 +5,26 @@ module Intensional.Horn.InferCoreExpr
 
 import           Control.Monad.Extra
 import           Control.Monad.RWS.Strict
+import           CoreArity                      ( exprBotStrictness_maybe )
 import qualified CoreSyn                       as Core
 import           Data.Bifunctor                 ( Bifunctor(bimap) )
 import qualified Data.IntSet                   as I
+import qualified Data.List                     as List
 import qualified Data.Map                      as Map
 import           Debug.Trace
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
                                                 )
+import           Intensional.FromCore
+import           Intensional.Horn.InferCoreSub
 import           Intensional.Horn.Monad
-import           Intensional.InferM             ( InferEnv(..), getExternalName )
+import           Intensional.InferM             ( InferEnv(..)
+                                                , getExternalName
+                                                )
 import           Intensional.Scheme            as Scheme
 import           Intensional.Types
 import           Intensional.Ubiq
-import Intensional.FromCore
-import Intensional.Horn.InferCoreSub
-import qualified Data.List as List
-import Pair
-import CoreArity (exprBotStrictness_maybe)
+import           Pair
 
 
 
@@ -37,6 +39,9 @@ inferProg (r : rs) = do
     ctx  <- if any isDerivedOccName bs then return mempty else associate r
     ctxs <- putVars ctx (inferProg rs)
     return (ctxs <> ctx)
+
+saturate = undefined
+cexs = undefined
 
 -- Infer a set of constraints and associate them to qualified type scheme
 associate :: CoreBind -> InferM HornContext
@@ -63,6 +68,7 @@ associate r = setLoc
         -- TODO: return debugging incrN
         return ctx'
 
+    satAction :: HornScheme -> InferM HornScheme
     satAction cs env s = do
         cs' <- snd <$> listen (saturate (tell cs >> return s))
         -- Attempt to build a model and record counterexamples

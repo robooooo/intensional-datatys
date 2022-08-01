@@ -20,7 +20,7 @@ data Horn a = Horn
     { hornHead :: Maybe a
     , hornBody :: Set a
     }
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Foldable)
 makeLensesFor 
     [("hornHead", "_head"), ("hornBody", "_body")] 
     ''Horn

@@ -1,5 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Intensional.Scheme
     ( Scheme
@@ -20,11 +21,17 @@ import           Binary
 import qualified Data.IntMap                   as IntMap
 import qualified Data.IntSet                   as I
 import           Data.Set                       ( Set )
+import qualified Data.Set                      as Set
 import qualified GHC
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
-import           Intensional.Horn.Clause        ( Horn )
+import           Intensional.Horn.Clause        ( Horn(hornBody, hornHead)
+                                                , _body
+                                                , _head
+                                                )
 import           Intensional.Types
+import           Lens.Micro              hiding ( _head )
+import           Lens.Micro.Extras              ( view )
 import           Lens.Micro.TH                  ( makeLensesFor )
 
 
@@ -119,6 +126,31 @@ instance (Refined con, Eq con, Monoid con, Outputable d)
                 [ forAllLit <+> fsep (map varMap $ I.toList (boundvs scheme))
                 , dot
                 ]
+instance (Ord a, Refined a) => Refined (Set a) where
+    domain = Set.foldr I.union I.empty . Set.map domain
+    rename x y = Set.map (rename x y)
+    prpr m xs =
+        hcat ["set ", brackets (fsep (punctuate comma (prpr m <$> toList xs)))]
+
+instance Refined Atom where
+    domain (_, x) = I.singleton x
+    rename x y (k, rv) | rv == x   = (k, y)
+                       | otherwise = (k, rv)
+    prpr m (k, x) = hcat [m x, "_", ppr k]
+
+instance (Ord a, Refined a) => Refined (Horn a) where
+    domain = foldMap domain
+    rename x y = over (_head . _Just) (rename x y) . over _body (rename x y)
+    prpr m horn =
+        let implHead = maybe "False" (prpr m) (view _head horn)
+            implBodies =
+                punctuate "&" $ (fmap $ prpr m) (toList $ view _body horn)
+        in  hcat $ implBodies ++ ["=>", implHead]
+
+instance Refined HornConstraint where
+    domain = domain . view _horn
+    rename x y = over _horn (rename x y)
+    prpr m = prpr m . view _horn
 
 -- Demand a monomorphic type
 mono :: Monoid con => SchemeGen con d -> TypeGen d

@@ -9,7 +9,8 @@ import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
 import           DataCon                        ( dataConName )
 import           GHC
-import           Intensional.Constraints
+import           Intensional.Constraints hiding ( guardWith )
+import           Intensional.Guard              ( singleton )
 import           Intensional.Horn.Clause
 import           Intensional.Horn.Constraint
 import           Intensional.InferM             ( BaseContext
@@ -53,13 +54,19 @@ putVars ctx = local (\env -> env { varEnv = Map.union ctx (varEnv env) })
 setLoc :: SrcSpan -> InferM a -> InferM a
 setLoc l = local (\env -> env { inferLoc = l })
 
--- Prepare name for interface
--- Should be used before all type variables
--- getExternalName :: NamedThing a => a -> InferM Name
--- getExternalName a = do
---     let n = getName a
---     mn <- asks modName
---     return $ mkExternalName (nameUnique n) mn (nameOccName n) (nameSrcSpan n)
+
+-- |Given a list of data constructors @ks@, a datatype @Inj x d@ and an 
+-- inference action @m@, @branchAny ks (Inj x d) m@ is the inference action
+-- that consists of doing @m@ then guarding all emitted constraints by the
+-- requirement that @ks in x(d)@.
+branchAny :: [DataCon] -> DataType TyCon -> InferM a -> InferM a
+branchAny _ (Base _) m = m
+branchAny ks (Inj x d) m | typeIsTrivial d = m
+                         | otherwise       = censor guardWithAll m
+  where
+    dn = getName d
+    guardWithAll cs =
+        foldMap (\k -> guardHornWith (singleton [getName k] x dn) cs) ks
 
 typeIsTrivial :: TyCon -> Bool
 typeIsTrivial tc = length (tyConDataCons tc) == 1
