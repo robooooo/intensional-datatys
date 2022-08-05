@@ -121,7 +121,7 @@ data Stats = Stats
     }
 
 runInferM
-    :: InferM a -> Module -> BaseContext ConstraintSet -> (a, [Atomic], Stats)
+    :: InferM a -> Module -> Context -> (a, [Atomic], Stats)
 runInferM run mod_name init_env =
     let (a, s, _) = runRWS
             run

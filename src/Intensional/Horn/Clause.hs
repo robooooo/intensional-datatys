@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, PatternSynonyms #-}
 module Intensional.Horn.Clause where
 
 import           Control.Applicative            ( (<|>)
@@ -15,19 +15,22 @@ import           Prelude                 hiding ( filter
                                                 , null
                                                 )
 
+
+
 -- | The type of horn clauses over variables of type a.
 data Horn a = Horn
     { hornHead :: Maybe a
     , hornBody :: Set a
     }
     deriving (Eq, Ord, Show, Foldable)
-makeLensesFor 
-    [("hornHead", "_head"), ("hornBody", "_body")] 
+makeLensesFor
+    [("hornHead", "_head"), ("hornBody", "_body")]
     ''Horn
 
 variables :: Ord a => Horn a -> Set a
-variables (Horn (Just guard) body) = guard `insert` body
-variables (Horn Nothing      body) = body
+variables horn = case horn of
+    (Horn (Just head) body) -> insert head body
+    (Horn Nothing     body) -> body
 
 -- | Determine if a horn clause is trivial, i.e. contains @x v ~x@.
 isTrivial :: Ord a => Horn a -> Bool
@@ -77,10 +80,9 @@ remove x (canonicize -> clauses) =
     isInHead (Horn head _) = Just x == head
     isInBody (Horn _ body) = x `elem` body
 
-
 -- | Saturate a conjunctive set of horn clauses under resolution.
 saturate :: Ord a => Set (Horn a) -> Set (Horn a)
-saturate clauses = go (saturate clauses) clauses
+saturate clauses = go (layer clauses) clauses
   where
     go curr prev | curr == prev = prev
                  | otherwise    = go (layer curr) curr
@@ -88,7 +90,6 @@ saturate clauses = go (saturate clauses) clauses
     layer clauses' =
         let vars = unions (map variables clauses')
         in  unions $ map (`remove` clauses') vars
-
 
 -- | Determine if a conjunctive set of horn clauses is unsatisfiable.
 -- TODO: This is done naively, not really utilising the special form of horn

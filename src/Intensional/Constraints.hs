@@ -73,8 +73,8 @@ instance Binary CInfo where
 
 
 {-|
-    The type of constraints @c@ of shape @guard c@ ? @left c@ ⊆ @right c@ that originated from the 
-    source at @srcSpan c@.
+    The type of constraints @c@ of shape @guard c@ ? @left c@ ⊆ @right c@ that
+    originated from the source at @srcSpan c@.
 -}
 type Atomic = Constraint 'L 'R
 

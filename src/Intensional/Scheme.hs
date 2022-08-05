@@ -71,7 +71,8 @@ pattern Forall :: Monoid con => [Name] -> TypeGen d -> SchemeGen con d
 pattern Forall as t <- Scheme as _ t _ where
     Forall as t = Scheme as mempty t mempty
 
-instance Outputable d => Outputable (SchemeGen ConstraintSet d) where
+instance (Refined con, Eq con, Monoid con, Outputable d)
+        => Outputable (SchemeGen con d) where
     ppr = prpr ppr
 
 instance (Binary con, Binary d) => Binary (SchemeGen con d) where

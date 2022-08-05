@@ -21,7 +21,6 @@ import           IfaceEnv
 import           IfaceSyn
 import           Intensional.Constraints
 import           Intensional.Constructors
-import           Intensional.InferCoreExpr
 import           Intensional.InferM
 import           Intensional.Types
 import           NameCache                      ( OrigNameCache )
@@ -36,6 +35,7 @@ import           TcIface
 import           TcRnMonad
 import           ToIface
 import           TyCoRep
+import qualified Intensional.InferCoreExpr as Sets
 
 {-|
   The GHC plugin is hardwired as @plugin@.  
@@ -93,7 +93,7 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
 
         t0 <- getCPUTime
         -- Infer constraints
-        let (!gamma, !errs, !stats) = runInferM (inferProg p) m env
+        let (!gamma, !errs, !stats) = runInferM (Sets.inferProg p) m env
         t1 <- getCPUTime
 
         when ("time" `elem` cmd) $ recordBenchmarks

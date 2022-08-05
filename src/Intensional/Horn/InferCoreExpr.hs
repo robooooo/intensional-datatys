@@ -9,13 +9,17 @@ import           CoreArity                      ( exprBotStrictness_maybe )
 import qualified CoreSyn                       as Core
 import           Data.Bifunctor                 ( Bifunctor(bimap) )
 import qualified Data.IntSet                   as I
+import qualified Data.IntSet                   as IS
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
+import qualified Data.Set                      as Set
 import           Debug.Trace
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
                                                 )
+import           Intensional.Constraints        ( CInfo(..) )
 import           Intensional.FromCore
+import           Intensional.Horn.Clause
 import           Intensional.Horn.InferCoreSub
 import           Intensional.Horn.Monad
 import           Intensional.InferM             ( InferEnv(..)
@@ -24,8 +28,24 @@ import           Intensional.InferM             ( InferEnv(..)
 import           Intensional.Scheme            as Scheme
 import           Intensional.Types
 import           Intensional.Ubiq
+import           Lens.Micro.Extras
 import           Pair
 
+-- | Saturate and restrict every element of the @Writer@ environment.
+saturateRestrict :: Refined a => InferM a -> InferM a
+saturateRestrict ma = pass $ do
+    a   <- ma
+    env <- asks varEnv
+    m   <- asks modName
+    src <- asks inferLoc
+    let interface = domain a <> domain env
+    -- noteI (IntSet.size interface)
+    return (a, satRes (CInfo m src) interface)
+  where
+    satRes ci iface cs =
+        let saturated = saturate (Set.map (view _horn) cs)
+            labelled  = Set.map (HornConstraint ci) saturated
+        in  Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) labelled
 
 
 onDebug :: Applicative f => String -> f ()
@@ -40,7 +60,7 @@ inferProg (r : rs) = do
     ctxs <- putVars ctx (inferProg rs)
     return (ctxs <> ctx)
 
-saturate = undefined
+cexs :: HornSet -> InferM HornSet
 cexs = undefined
 
 -- Infer a set of constraints and associate them to qualified type scheme
@@ -68,9 +88,9 @@ associate r = setLoc
         -- TODO: return debugging incrN
         return ctx'
 
-    satAction :: HornScheme -> InferM HornScheme
+    satAction :: HornSet -> HornContext -> HornScheme -> InferM HornScheme
     satAction cs env s = do
-        cs' <- snd <$> listen (saturate (tell cs >> return s))
+        cs' <- snd <$> listen (saturateRestrict (tell cs >> return s))
         -- Attempt to build a model and record counterexamples
         es  <- cexs cs'
         return $ s { boundvs = (domain cs' <> domain s) I.\\ domain env
@@ -114,17 +134,17 @@ infer (  Core.App e1 (Core.Type e2)) = do
         Forall [] Ambiguous -> return (Forall [] Ambiguous)
         _ -> pprPanic "Type application to monotype!" (ppr (scheme, e2))
 
--- infer (Core.App e1 e2) = saturate
---     (infer e1 >>= \case
---         Forall as Ambiguous   -> Forall as Ambiguous <$ infer e2
---         -- See FromCore 88 for the case when as /= []
---         Forall as (t3 :=> t4) -> do
---             t2 <- mono <$> infer e2
---             inferSubType t2 t3
---             return $ Forall as t4
---         _ -> pprPanic "The expression has been given too many arguments!"
---             $ ppr (exprType e1, exprType e2)
---     )
+infer (Core.App e1 e2) = saturateRestrict
+    (infer e1 >>= \case
+        Forall as Ambiguous   -> Forall as Ambiguous <$ infer e2
+        -- See FromCore 88 for the case when as /= []
+        Forall as (t3 :=> t4) -> do
+            t2 <- mono <$> infer e2
+            inferSubType t2 t3
+            return $ Forall as t4
+        _ -> pprPanic "The expression has been given too many arguments!"
+            $ ppr (exprType e1, exprType e2)
+    )
 
 infer (Core.Lam x e)
     | isTyVar x = do
@@ -137,11 +157,11 @@ infer (Core.Lam x e)
         putVar (getName x) (Forall [] t1) (infer e) >>= \case
             Forall as t2 -> return $ Forall as (t1 :=> t2)
 
--- infer (Core.Let b e) = saturate $ do
---     ts <- associate b
---     putVars ts $ infer e
+infer (Core.Let b e) = saturateRestrict $ do
+    ts <- associate b
+    putVars ts $ infer e
 
-infer (Core.Case e bind_e core_ret alts) = saturate $ do
+infer (Core.Case e bind_e core_ret alts) = saturateRestrict $ do
     -- Fresh return type
     ret <- freshCoreType core_ret
     -- Infer expression on which to pattern match
