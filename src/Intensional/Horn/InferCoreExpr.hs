@@ -8,13 +8,11 @@ import           Control.Monad.RWS.Strict
 import           CoreArity                      ( exprBotStrictness_maybe )
 import qualified CoreSyn                       as Core
 import           Data.Bifunctor                 ( Bifunctor(bimap) )
-import qualified Data.IntMap                   as IM
 import qualified Data.IntSet                   as I
 import qualified Data.IntSet                   as IS
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
-import           Debug.Trace
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
                                                 )
@@ -24,7 +22,7 @@ import           Intensional.Horn.Clause
 import           Intensional.Horn.InferCoreSub
 import           Intensional.Horn.Monad
 import           Intensional.InferM             ( InferEnv(..)
-                                                , getExternalName
+                                                , getExternalName, MonadInferState (..)
                                                 )
 import           Intensional.Scheme            as Scheme
 import           Intensional.Types
@@ -89,7 +87,7 @@ associate r = setLoc
         unless (Set.null es) $ error "es"
 
         debugTrace ("End inferring: " ++ bindingNames)
-        -- TODO: return debugging incrN
+        incrN
         return ctx'
 
     satAction :: HornSet -> HornContext -> HornScheme -> InferM HornScheme

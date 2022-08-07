@@ -50,11 +50,11 @@ recordBenchmarks name (t0, t1) stats = do
   where
     updateAverage b =
         b { avg = sum (times b) `div` toInteger (length (times b)) }
-    new = Benchmark { bigN  = getN stats
-                    , bigD  = getD stats
-                    , bigV  = getV stats
-                    , bigK  = getK stats
-                    , bigI  = getI stats
+    new = Benchmark { bigN  = cntN stats
+                    , bigD  = maxD stats
+                    , bigV  = rVar stats
+                    , bigK  = maxK stats
+                    , bigI  = maxI stats
                     , times = [t1 - t0]
                     , avg   = t1 - t0
                     }

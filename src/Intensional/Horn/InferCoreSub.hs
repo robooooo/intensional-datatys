@@ -6,6 +6,7 @@ import           Control.Monad.Extra
 import           Control.Monad.RWS.Strict
 import           Control.Monad.State            ( StateT )
 import qualified Control.Monad.State           as State
+import           Data.List                      ( nub )
 import qualified Data.Set                      as Set
 import           Debug.Trace
 import           GhcPlugins              hiding ( (<>)
@@ -16,7 +17,9 @@ import           Intensional.Guard
 import qualified Intensional.Guard             as Guard
 import           Intensional.Horn.Constraint    ( guardHornWith )
 import           Intensional.Horn.Monad
-import           Intensional.InferM             ( InferEnv(..) )
+import           Intensional.InferM             ( InferEnv(..)
+                                                , MonadInferState(..)
+                                                )
 import           Intensional.Types
 import           Intensional.Ubiq
 
@@ -63,14 +66,14 @@ inferSubType t1 t2 = do
             inferSubTypeFix
             ([(mempty, x, y, d, as, as')], [(mempty, x, y, d)])
         -- Note how big it was for statistics
-        -- TODO: return noteD $ length (nub $ map (\(_, _, _, d') -> getName d') ds)
+        noteD $ length (nub $ map (\(_, _, _, d') -> getName d') ds)
         -- Emit a constraint for each one
         forM_ ds $ \(gs, x', y', d') ->
             censor (guardHornWith gs) (emitDD (Inj x' d') (Inj y' d'))
 
     when debugging $ do
         src <- asks inferLoc
-        traceM ("[TRACE] Starting subtpe inference at " ++ traceSpan src)
+        traceM ("[TRACE] Starting subtype inference at " ++ traceSpan src)
         let sz = Set.size cs
         traceM
             (  "[TRACE] The subtype proof at "
@@ -99,7 +102,7 @@ inferSubType t1 t2 = do
             put ([], acc)
             forM_ frontier $ \(gs, x, y, d, as, as') -> do
                 let dataCons = tyConDataCons d
-                -- TODO: return debug lift $ noteK (length dataCons)
+                lift $ noteK (length dataCons)
                 forM_ dataCons $ \k -> do
                     xtys <- lift $ consInstArgs x as k
                     ytys <- lift $ consInstArgs y as' k

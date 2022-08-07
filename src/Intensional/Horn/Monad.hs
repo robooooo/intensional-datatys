@@ -3,7 +3,6 @@
 module Intensional.Horn.Monad where
 
 import           Control.Monad.RWS.Strict
-import           Data.Map                       ( Map )
 import qualified Data.Map                      as Map
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
@@ -16,19 +15,30 @@ import           Intensional.Horn.Clause
 import           Intensional.Horn.Constraint
 import           Intensional.InferM             ( BaseContext
                                                 , InferEnv(..)
-                                                , MonadFresh(..)
-                                                , MonadInfer(..)
                                                 , Stats(..)
+                                                , MonadInfer(..)
+                                                , MonadInferState(..)
+                                                , Stats(..)
+                                                , _d
+                                                , _i
+                                                , _k
+                                                , _n
+                                                , _rv
                                                 )
 import           Intensional.Scheme
 import           Intensional.Types
+import           Lens.Micro
 
 
 
-type InferM = RWS (InferEnv HornSet) HornSet RVar
+type InferM = RWS (InferEnv HornSet) HornSet Stats
 
-instance MonadFresh InferM where
+instance MonadInferState InferM where
     mfresh = fresh
+    noteK x = modify $ over _k (max x)
+    noteD x = modify $ over _d (max x)
+    noteI x = modify $ over _i (max x)
+    incrN = modify $ over _n (+ 1)
 
 instance (MonadInfer HornSet) InferM where
     memitDD = emitDD
@@ -37,20 +47,20 @@ instance (MonadInfer HornSet) InferM where
 
 type HornContext = BaseContext HornSet
 
-runInferM :: InferM a -> Module -> HornContext -> (a, RVar, Stats)
+runInferM :: InferM a -> Module -> HornContext -> (a, HornSet, Stats)
 runInferM run mod_name init_env =
     let (a, s, w) = runRWS
             run
             (InferEnv mod_name init_env (UnhelpfulSpan (mkFastString "Nowhere"))
             )
-            0
-    in  (a, 0, Stats 0 0 0 0 0)
+            (Stats 0 0 0 0 0)
+    in  (a, Set.empty, s)
 
 -- | Create a fresh refinement variable.
 fresh :: InferM RVar
 fresh = do
-    i <- get
-    modify (+ 1)
+    i <- gets rVar
+    modify $ over _rv (+ 1)
     return i
 
 -- | Insert a variable into environment.

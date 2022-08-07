@@ -75,7 +75,7 @@ inferSubType t1 t2 = do
 
     when debugging $ do
         src <- asks inferLoc
-        traceM ("[TRACE] Starting subtpe inference at " ++ traceSpan src)
+        traceM ("[TRACE] Starting subtype inference at " ++ traceSpan src)
         let sz = Constraints.size cs
         traceM
             (  "[TRACE] The subtype proof at "

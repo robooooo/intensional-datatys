@@ -10,29 +10,27 @@ module Intensional
 import           BinIface
 import           Binary
 import           Control.Monad
-import           Data.Aeson
 import           Data.Bifunctor                 ( first )
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
 import           Data.Map                       ( Map )
-import           GHC.Generics                   ( Generic )
+import           Display
 import           GhcPlugins
 import           IfaceEnv
 import           IfaceSyn
 import           Intensional.Constraints
-import           Intensional.Constructors
 import qualified Intensional.Horn.InferCoreExpr
                                                as Horn
 import qualified Intensional.Horn.Monad        as Horn
 import qualified Intensional.InferCoreExpr     as Sets
 import           Intensional.InferM
 import qualified Intensional.InferM            as Sets
-import           Intensional.Scheme             ( SchemeGen )
+import           Intensional.Scheme
 import           Intensional.Types
 import           Lens.Micro
+import           Lens.Micro.Extras
 import           NameCache                      ( OrigNameCache )
 import           OccName
-import           PprColour
 import           Pretty                         ( Mode(..) )
 import           System.CPUTime
 import qualified System.Console.Haskeline      as Haskeline
@@ -42,8 +40,6 @@ import           TcIface
 import           TcRnMonad
 import           ToIface
 import           TyCoRep
-import Display
-
 
 {-| 
   The GHC plugin is hardwired as @plugin@.  
@@ -76,7 +72,7 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
     let useSetConstrs = True
     -- Reload saved typeschemes
     envHorn <- reloadSaved "Horn"
-    envSets <- reloadSaved "Sets"
+    envSets <- reloadSaved "Set"
 
     if useSetConstrs
         then liftIO $ do
@@ -105,7 +101,7 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                 $ repl (gamma Prelude.<> envSets) m p che
 
             -- Save typeschemes to interface file
-            saveScheme "Sets" gamma
+            saveScheme "Set" gamma
         else liftIO $ do
             t0 <- getCPUTime
             -- Infer constraints
@@ -125,14 +121,15 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                     stderr
                     (setStyleColoured True $ defaultErrStyle dflags)
 
-            -- forM_ errs
-            --     $ \a -> when (m == modInfo a) (printErrLn $ showTypeError a)
+            forM_ errs
+                $ \a -> when (m == view (_cinfo . to prov) a)
+                             (printErrLn $ showTypeError a)
 
             when (moduleNameString (moduleName m) `elem` cmd)
                 $ repl (gamma Prelude.<> envHorn) m p che
 
             -- Save typeschemes to interface file
-            saveScheme "Sets" gamma
+            saveScheme "Horn" gamma
 
 
     return guts

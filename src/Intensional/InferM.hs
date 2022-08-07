@@ -1,31 +1,5 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
-module Intensional.InferM
-    ( InferM
-    , BaseContext
-    , Context
-    , InferEnv(..)
-    , Stats(..)
-    , MonadInfer(..)
-    , MonadFresh(..)
-    , runInferM
-    , Intensional.InferM.saturate
-    , branchAny
-    , emitDD
-    , emitDK
-    , emitKD
-    , fresh
-    , putVar
-    , putVars
-    , setLoc
-    , getExternalName
-    , isTrivial
-    , isIneligible
-    , noteD
-    , noteK
-    , incrN
-    , noteErrs
-    , Intensional.InferM.cexs
-    ) where
+{-# LANGUAGE MultiParamTypeClasses, TemplateHaskell #-}
+module Intensional.InferM where
 
 import           Control.Monad.RWS.Strict
                                          hiding ( guard )
@@ -40,21 +14,59 @@ import           Intensional.Guard
 import           Intensional.Scheme
 import           Intensional.Types
 import           Intensional.Ubiq
+import           Lens.Micro
+import           Lens.Micro.Extras
+import           Lens.Micro.TH                  ( makeLensesFor )
+
+
+data Stats = Stats
+    { maxK :: Int
+    , maxD :: Int
+    , maxI :: Int
+    , cntN :: Int
+    , rVar :: Int
+    }
+
+makeLensesFor
+    [ ("maxK", "_k")
+    , ("maxD", "_d")
+    , ("maxI", "_i")
+    , ("cntN", "_n")
+    , ("rVar", "_rv")]
+    ''Stats
+
+data InferState = InferState
+    { inner :: Stats
+    , errs  :: ConstraintSet
+    }
+
+makeLensesFor
+    [("inner", "_inner"), ("errs", "_errs")]
+    ''InferState
 
 type InferM = RWS (InferEnv ConstraintSet) ConstraintSet InferState
 
-class Monad m => MonadFresh m where
+class Monad m => MonadInferState m where
     mfresh :: m RVar
+    noteK  :: Int -> m ()
+    noteD  :: Int -> m ()
+    noteI  :: Int -> m ()
+    incrN  :: m ()
 
 -- | State component of @MonadInfer@. Because the two use differently shaped
 -- state types, this represents the common intersection of them.
 -- (Namely, creating fresh refinement variables).
 -- Should probably include debugging in future too?
-instance MonadFresh InferM where
+instance MonadInferState InferM where
     mfresh = fresh
+    noteK x = modify $ over (_inner . _k) (max x)
+    noteD x = modify $ over (_inner . _d) (max x)
+    noteI x = modify $ over (_inner . _i) (max x)
+    incrN = modify $ over (_inner . _n) (+ 1)
 
 -- | Generalise over both types of inference monads.
-class (MonadWriter con m, MonadReader (InferEnv con) m, MonadFresh m) => MonadInfer con m where
+class (MonadWriter con m, MonadReader (InferEnv con) m, MonadInferState m)
+        => MonadInfer con m where
     memitDD :: DataType TyCon -> DataType TyCon -> m ()
     memitKD :: DataCon -> SrcSpan -> DataType TyCon -> m ()
     memitDK :: DataType TyCon -> [DataCon] -> SrcSpan -> m ()
@@ -77,32 +89,8 @@ data InferEnv con = InferEnv
     , inferLoc :: SrcSpan
     }
 
-data InferState = InferState
-    { maxK :: Int
-    , maxD :: Int
-    , maxI :: Int
-    , cntN :: Int
-    , rVar :: Int
-    , errs :: ConstraintSet
-    }
-
 initState :: InferState
-initState = InferState 0 0 0 0 0 mempty
-
-noteK :: Int -> InferM ()
-noteK x = modify (\s -> s { maxK = max x (maxK s) })
-
-noteD :: Int -> InferM ()
-noteD x = modify (\s -> s { maxD = max x (maxD s) })
-
-noteI :: Int -> InferM ()
-noteI x = modify (\s -> s { maxI = max x (maxI s) })
-
-incrV :: InferM ()
-incrV = modify (\s -> s { rVar = rVar s + 1 })
-
-incrN :: InferM ()
-incrN = modify (\s -> s { cntN = cntN s + 1 })
+initState = InferState (Stats 0 0 0 0 0) mempty
 
 {-|
   Given a set of trivially unsatisfiable constraints @es@,
@@ -112,25 +100,17 @@ incrN = modify (\s -> s { cntN = cntN s + 1 })
 noteErrs :: ConstraintSet -> InferM ()
 noteErrs es = modify (\s -> s { errs = es <> errs s })
 
-data Stats = Stats
-    { getK :: Int
-    , getD :: Int
-    , getV :: Int
-    , getI :: Int
-    , getN :: Int
-    }
-
-runInferM
-    :: InferM a -> Module -> Context -> (a, [Atomic], Stats)
+runInferM :: InferM a -> Module -> Context -> (a, [Atomic], Stats)
 runInferM run mod_name init_env =
     let (a, s, _) = runRWS
             run
             (InferEnv mod_name init_env (UnhelpfulSpan (mkFastString "Nowhere"))
             )
             initState
+        stats = inner s
     in  ( a
         , Constraints.toList (errs s)
-        , Stats (maxK s) (maxD s) (rVar s) (maxI s) (cntN s)
+        , Stats (maxK stats) (maxD stats) (rVar stats) (maxI stats) (cntN stats)
         )
 
 -- Transitively remove local constraints
@@ -263,8 +243,8 @@ emitDK _ _ _ = return ()
 -- A fresh refinement variable
 fresh :: InferM RVar
 fresh = do
-    i <- gets rVar
-    incrV
+    i <- gets $ view (_inner . _rv)
+    modify $ over (_inner . _rv) (+ 1)
     return i
 
 -- Insert variables into environment
