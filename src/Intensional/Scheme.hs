@@ -25,9 +25,10 @@ import qualified Data.Set                      as Set
 import qualified GHC
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
-import           Intensional.Horn.Clause        ( Horn(hornBody, hornHead)
+import           Intensional.Horn.Clause        ( Horn(..)
                                                 , _body
                                                 , _head
+                                                , variables
                                                 )
 import           Intensional.Types
 import           Lens.Micro              hiding ( _head )
@@ -82,6 +83,18 @@ instance (Binary con, Binary d) => Binary (SchemeGen con d) where
     get bh =
         Scheme <$> get bh <*> (I.fromList <$> get bh) <*> get bh <*> get bh
 
+instance (Binary a, Ord a) => Binary (Set a) where
+    put_ bh = put_ bh . toList
+    get bh = Set.fromList <$> get bh
+
+instance (Binary a, Ord a) => Binary (Horn a) where
+    put_ bh (Horn hhead body) = put_ bh (hhead, body)
+    get bh = uncurry Horn <$> get bh
+
+instance Binary HornConstraint where
+    put_ bh (HornConstraint ci horn) = put_ bh (ci, horn)
+    get bh = uncurry HornConstraint <$> get bh
+
 instance (Refined con, Eq con, Monoid con, Outputable d)
         => Refined (SchemeGen con d) where
 
@@ -128,10 +141,12 @@ instance (Refined con, Eq con, Monoid con, Outputable d)
                 , dot
                 ]
 instance (Ord a, Refined a) => Refined (Set a) where
-    domain = Set.foldr I.union I.empty . Set.map domain
+    domain = I.unions . Set.map domain
     rename x y = Set.map (rename x y)
-    prpr m xs =
-        hcat ["set ", brackets (fsep (punctuate comma (prpr m <$> toList xs)))]
+    prpr m xs = hcat
+        [ "Set.fromList "
+        , brackets (fsep (punctuate comma (prpr m <$> toList xs)))
+        ]
 
 instance Refined Atom where
     domain (_, x) = I.singleton x
@@ -140,18 +155,26 @@ instance Refined Atom where
     prpr m (k, x) = hcat [m x, "_", ppr k]
 
 instance (Ord a, Refined a) => Refined (Horn a) where
-    domain = foldMap domain
+    domain = I.unions . Set.map domain . variables
     rename x y = over (_head . _Just) (rename x y) . over _body (rename x y)
     prpr m horn =
         let implHead = maybe "False" (prpr m) (view _head horn)
             implBodies =
-                punctuate "&" $ (fmap $ prpr m) (toList $ view _body horn)
-        in  hcat $ implBodies ++ ["=>", implHead]
+                punctuate " & " $ (fmap $ prpr m) (toList $ view _body horn)
+        in  hcat $ implBodies ++ [" => ", implHead]
 
 instance Refined HornConstraint where
     domain = domain . view _horn
     rename x y = over _horn (rename x y)
-    prpr m = prpr m . view _horn
+    prpr m hc =
+        let HornConstraint (CInfo prov sspn) horn = hc
+        in  hcat
+                [ "HornConstraint("
+                , hcat ["CInfo(", ppr prov, ", ", ppr sspn, ")"]
+                , ", "
+                , prpr m horn
+                , ")"
+                ]
 
 -- Demand a monomorphic type
 mono :: Monoid con => SchemeGen con d -> TypeGen d

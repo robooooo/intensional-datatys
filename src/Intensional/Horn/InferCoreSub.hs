@@ -6,6 +6,7 @@ import           Control.Monad.Extra
 import           Control.Monad.RWS.Strict
 import           Control.Monad.State            ( StateT )
 import qualified Control.Monad.State           as State
+import qualified Data.Set                      as Set
 import           Debug.Trace
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
@@ -18,7 +19,6 @@ import           Intensional.Horn.Monad
 import           Intensional.InferM             ( InferEnv(..) )
 import           Intensional.Types
 import           Intensional.Ubiq
-import qualified Data.Set as Set
 
 {- |
     The type of subtype inference constraints that are accumulated

@@ -89,7 +89,8 @@ saturate clauses = go (layer clauses) clauses
 
     layer clauses' =
         let vars = unions (map variables clauses')
-        in  unions $ map (`remove` clauses') vars
+            next = unions $ map (`remove` clauses') vars
+        in  clauses' `union` next
 
 -- | Determine if a conjunctive set of horn clauses is unsatisfiable.
 -- TODO: This is done naively, not really utilising the special form of horn

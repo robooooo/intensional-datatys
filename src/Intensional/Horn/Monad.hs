@@ -9,6 +9,7 @@ import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
 import           DataCon                        ( dataConName )
 import           GHC
+import           GhcPlugins                     ( mkFastString )
 import           Intensional.Constraints hiding ( guardWith )
 import           Intensional.Guard              ( singleton )
 import           Intensional.Horn.Clause
@@ -17,6 +18,7 @@ import           Intensional.InferM             ( BaseContext
                                                 , InferEnv(..)
                                                 , MonadFresh(..)
                                                 , MonadInfer(..)
+                                                , Stats(..)
                                                 )
 import           Intensional.Scheme
 import           Intensional.Types
@@ -34,6 +36,15 @@ instance (MonadInfer HornSet) InferM where
     memitKD = emitKD
 
 type HornContext = BaseContext HornSet
+
+runInferM :: InferM a -> Module -> HornContext -> (a, RVar, Stats)
+runInferM run mod_name init_env =
+    let (a, s, w) = runRWS
+            run
+            (InferEnv mod_name init_env (UnhelpfulSpan (mkFastString "Nowhere"))
+            )
+            0
+    in  (a, 0, Stats 0 0 0 0 0)
 
 -- | Create a fresh refinement variable.
 fresh :: InferM RVar

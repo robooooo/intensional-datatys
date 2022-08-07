@@ -149,7 +149,7 @@ associate r = setLoc
     
     doAssoc :: InferM Context
     doAssoc = do
-        when debugging $ traceM ("[TRACE] Begin inferring: " ++ bindingNames)
+        debugTrace ("Begin inferring: " ++ bindingNames)
         env       <- asks varEnv
         (ctx, cs) <- listen $ inferRec r
         let satAction s = do
@@ -164,7 +164,7 @@ associate r = setLoc
         -- note down any counterexamples
         let es = M.foldl' (\ss sch -> Scheme.unsats sch <> ss) mempty ctx'
         noteErrs es
-        when debugging $ traceM ("[TRACE] End inferring: " ++ bindingNames)
+        debugTrace ("End inferring: " ++ bindingNames)
         incrN
         return ctx'
 

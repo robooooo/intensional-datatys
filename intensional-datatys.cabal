@@ -41,10 +41,12 @@ library
       Intensional.Horn.Monad
       Intensional.Horn.Clause
       Intensional.Horn.Constraint
+      Intensional.Horn.InferCoreExpr
+      Intensional.Horn.InferCoreSub
   hs-source-dirs:
       src
   cpp-options:
-      -- -DDEBUG
+      -DDEBUG
   ghc-options:
       -Wall
       -Wcompat

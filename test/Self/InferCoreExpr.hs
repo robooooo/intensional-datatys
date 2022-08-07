@@ -72,7 +72,7 @@ associate r =
     bindingNames = 
       show $ map (occNameString . occName) (bindersOf r)
     doAssoc =
-      do  when debugging $ traceM ("[TRACE] Begin inferring: " ++ bindingNames)
+      do  debugTrace ("Begin inferring: " ++ bindingNames)
           env <- asks varEnv
           -- The following ! ensures the constraints are processed immediately
           -- which helps tracing make sense.
@@ -85,7 +85,7 @@ associate r =
                         Self.Scheme.constraints = cs'
                       }
           ctx' <- mapM satAction ctx
-          when debugging $ traceM ("[TRACE] End inferring: " ++ bindingNames)        
+          debugTrace ("End inferring: " ++ bindingNames)        
           return ctx'
 
 -- Infer constraints for a mutually recursive binders

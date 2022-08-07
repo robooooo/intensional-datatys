@@ -15,14 +15,22 @@ import           Data.Aeson
 import           Data.Bifunctor                 ( first )
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
+import           Data.Map                       ( Map )
 import           GHC.Generics                   ( Generic )
 import           GhcPlugins
 import           IfaceEnv
 import           IfaceSyn
 import           Intensional.Constraints
 import           Intensional.Constructors
+import qualified Intensional.Horn.InferCoreExpr
+                                               as Horn
+import qualified Intensional.Horn.Monad        as Horn
+import qualified Intensional.InferCoreExpr     as Sets
 import           Intensional.InferM
+import qualified Intensional.InferM            as Sets
+import           Intensional.Scheme             ( SchemeGen )
 import           Intensional.Types
+import           Lens.Micro
 import           NameCache                      ( OrigNameCache )
 import           OccName
 import           PprColour
@@ -35,9 +43,9 @@ import           TcIface
 import           TcRnMonad
 import           ToIface
 import           TyCoRep
-import qualified Intensional.InferCoreExpr as Sets
 
-{-|
+
+{-| 
   The GHC plugin is hardwired as @plugin@.  
 -}
 plugin :: Plugin
@@ -62,38 +70,22 @@ interfaceName = ("interface/" ++) . moduleNameString
 inferGuts :: [CommandLineOption] -> ModGuts -> CoreM ModGuts
 inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
     when ("debug-core" `elem` cmd) $ pprTraceM "Core Source:" $ ppr p
-    hask   <- getHscEnv
     che    <- getOrigNameCache
     dflags <- getDynFlags
 
+    let useSetConstrs = False
+    -- Reload saved typeschemes
+    envSets <- reloadSaved "Sets"
+    -- envHorn <- reloadSaved "Horn"
+
     liftIO $ do
-        -- Reload saved typeschemes
-        let
-            gbl = IfGblEnv { if_doc       = text "initIfaceLoad"
-                           , if_rec_types = Nothing
-                           }
-        env <- initTcRnIf 'i' hask gbl (mkIfLclEnv m empty False) $ do
-            cache <- mkNameCacheUpdater
-            foldM
-                (\env (interfaceName -> m_name, _) -> do
-                    exists <- liftIO $ doesFileExist m_name
-                    if exists
-                        then do
-                            bh   <- liftIO $ readBinMem m_name
-                            ictx <-
-                                liftIO
-                                $   Map.fromList
-                                <$> getWithUserData cache bh
-                            ctx <- mapM (mapM tcIfaceTyCon) ictx
-                            return (Map.union ctx env)
-                        else return env
-                )
-                Map.empty
-                (dep_mods d)
 
         t0 <- getCPUTime
         -- Infer constraints
-        let (!gamma, !errs, !stats) = runInferM (Sets.inferProg p) m env
+        let (!gamma, !errs, !stats) = if useSetConstrs
+                then Sets.runInferM (Sets.inferProg p) m envSets
+                -- else Horn.runInferM (Horn.inferProg p) m envHorn
+                else undefined
         t1 <- getCPUTime
 
         when ("time" `elem` cmd) $ recordBenchmarks
@@ -107,11 +99,15 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                 dflags
                 stderr
                 (setStyleColoured True $ defaultErrStyle dflags)
+        -- print (show errs)
         forM_ errs $ \a -> when (m == modInfo a) (printErrLn $ showTypeError a)
 
+        when (moduleNameString (moduleName m) `elem` cmd) $ if useSetConstrs
+            then repl (gamma Prelude.<> envSets) m p che
+            -- else repl (gamma Prelude.<> envHorn) m p che
+            else undefined
+
         -- Save typeschemes to interface file
-        when (moduleNameString (moduleName m) `elem` cmd)
-            $ repl (gamma Prelude.<> env) m p che
         exist <- doesDirectoryExist "interface"
         unless exist (createDirectory "interface")
         bh <- openBinMem (1024 * 1024)
@@ -122,7 +118,37 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                                             (fmap toIfaceTyCon <$> gamma)
             )
         writeBinMem bh (interfaceName (moduleName m))
+
         return guts
+
+  where
+    gbl = IfGblEnv { if_doc = text "initIfaceLoad", if_rec_types = Nothing }
+
+    reloadSaved
+        :: Binary con => FilePath -> CoreM (Map Name (SchemeGen con TyCon))
+    reloadSaved prefix = do
+        hask <- getHscEnv
+        liftIO $ do
+            initTcRnIf 'i' hask gbl (mkIfLclEnv m empty False) $ do
+                cache <- mkNameCacheUpdater
+                foldM
+                    (\env (mod', _) -> do
+                        let m_name = prefix ++ interfaceName mod'
+                        exists <- liftIO $ doesFileExist m_name
+                        if exists
+                            then do
+                                bh   <- liftIO $ readBinMem m_name
+                                ictx <-
+                                    liftIO
+                                    $   Map.fromList
+                                    <$> getWithUserData cache bh
+                                ctx <- mapM (mapM tcIfaceTyCon) ictx
+                                return (Map.union ctx env)
+                            else return env
+                    )
+                    Map.empty
+                    (dep_mods d)
+
 
 {-|
   When @cx@ is the type bindings for all the program so far and @md@
@@ -130,7 +156,13 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
   @repl cx md ch@ is a read-eval-print-loop IO action, allowing the 
   user to inspect individual type bindings and output the raw core.
 -}
-repl :: Context -> Module -> CoreProgram -> OrigNameCache -> IO ()
+repl
+    :: (Refined con, Eq con, Monoid con)
+    => BaseContext con
+    -> Module
+    -> CoreProgram
+    -> OrigNameCache
+    -> IO ()
 repl cx md pr ch = Haskeline.runInputT Haskeline.defaultSettings loop
   where
     loop = do

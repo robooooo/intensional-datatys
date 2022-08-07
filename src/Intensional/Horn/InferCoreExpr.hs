@@ -8,6 +8,7 @@ import           Control.Monad.RWS.Strict
 import           CoreArity                      ( exprBotStrictness_maybe )
 import qualified CoreSyn                       as Core
 import           Data.Bifunctor                 ( Bifunctor(bimap) )
+import qualified Data.IntMap                   as IM
 import qualified Data.IntSet                   as I
 import qualified Data.IntSet                   as IS
 import qualified Data.List                     as List
@@ -47,10 +48,6 @@ saturateRestrict ma = pass $ do
             labelled  = Set.map (HornConstraint ci) saturated
         in  Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) labelled
 
-
-onDebug :: Applicative f => String -> f ()
-onDebug msg = when debugging (traceM msg)
-
 -- Infer constraints for a module
 inferProg :: CoreProgram -> InferM HornContext
 inferProg []       = return Map.empty
@@ -60,8 +57,8 @@ inferProg (r : rs) = do
     ctxs <- putVars ctx (inferProg rs)
     return (ctxs <> ctx)
 
-cexs :: HornSet -> InferM HornSet
-cexs = undefined
+triviallyUnsat :: HornSet -> HornSet
+triviallyUnsat = Set.filter $ (== Horn Nothing Set.empty) . view _horn
 
 -- Infer a set of constraints and associate them to qualified type scheme
 associate :: CoreBind -> InferM HornContext
@@ -74,17 +71,24 @@ associate r = setLoc
 
     doAssoc :: InferM HornContext
     doAssoc = do
-        onDebug ("[TRACE] Begin inferring: " ++ bindingNames)
+        debugTrace ("Begin inferring: " ++ bindingNames)
         env       <- asks varEnv
         (ctx, cs) <- listen $ inferRec r
 
         -- add constraints to every type in the recursive group
         ctx'      <- mapM (satAction cs env) ctx
         -- note down any counterexamples
-        -- let es = Map.foldl' (\ss sch -> Scheme.unsats sch <> ss) mempty ctx'
-        -- noteErrs es
+        let
+            es = Map.foldl'
+                (\ss sch -> triviallyUnsat (constraints sch) <> ss)
+                mempty
+                ctx'
+        -- traceM $ showSDocUnsafe (prpr ppr es)
 
-        onDebug ("[TRACE] End inferring: " ++ bindingNames)
+        -- TODO: This is originally @noteErrs es@ and should probably be again.
+        unless (Set.null es) $ error "es"
+
+        debugTrace ("End inferring: " ++ bindingNames)
         -- TODO: return debugging incrN
         return ctx'
 
@@ -92,7 +96,7 @@ associate r = setLoc
     satAction cs env s = do
         cs' <- snd <$> listen (saturateRestrict (tell cs >> return s))
         -- Attempt to build a model and record counterexamples
-        es  <- cexs cs'
+        let es = triviallyUnsat cs'
         return $ s { boundvs = (domain cs' <> domain s) I.\\ domain env
                    , Scheme.constraints = es <> cs'
                    }
