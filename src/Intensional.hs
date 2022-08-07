@@ -5,7 +5,6 @@
 
 module Intensional
     ( plugin
-    , Benchmark(..)
     ) where
 
 import           BinIface
@@ -43,6 +42,7 @@ import           TcIface
 import           TcRnMonad
 import           ToIface
 import           TyCoRep
+import Display
 
 
 {-| 
@@ -73,67 +73,83 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
     che    <- getOrigNameCache
     dflags <- getDynFlags
 
-    let useSetConstrs = False
+    let useSetConstrs = True
     -- Reload saved typeschemes
+    envHorn <- reloadSaved "Horn"
     envSets <- reloadSaved "Sets"
-    -- envHorn <- reloadSaved "Horn"
 
-    liftIO $ do
+    if useSetConstrs
+        then liftIO $ do
+            t0 <- getCPUTime
+            -- Infer constraints
+            let (!gamma, !errs, !stats) =
+                    Sets.runInferM (Sets.inferProg p) m envSets
+            t1 <- getCPUTime
 
-        t0 <- getCPUTime
-        -- Infer constraints
-        let (!gamma, !errs, !stats) = if useSetConstrs
-                then Sets.runInferM (Sets.inferProg p) m envSets
-                -- else Horn.runInferM (Horn.inferProg p) m envHorn
-                else undefined
-        t1 <- getCPUTime
+            when ("time" `elem` cmd) $ recordBenchmarks
+                (moduleNameString (moduleName m))
+                (t0, t1)
+                stats
 
-        when ("time" `elem` cmd) $ recordBenchmarks
-            (moduleNameString (moduleName m))
-            (t0, t1)
-            stats
+            -- Display type errors
+            let printErrLn = printSDocLn
+                    PageMode
+                    dflags
+                    stderr
+                    (setStyleColoured True $ defaultErrStyle dflags)
 
-        -- Display type errors
-        let printErrLn = printSDocLn
-                PageMode
-                dflags
-                stderr
-                (setStyleColoured True $ defaultErrStyle dflags)
-        -- print (show errs)
-        forM_ errs $ \a -> when (m == modInfo a) (printErrLn $ showTypeError a)
+            forM_ errs
+                $ \a -> when (m == modInfo a) (printErrLn $ showTypeError a)
 
-        when (moduleNameString (moduleName m) `elem` cmd) $ if useSetConstrs
-            then repl (gamma Prelude.<> envSets) m p che
-            -- else repl (gamma Prelude.<> envHorn) m p che
-            else undefined
+            when (moduleNameString (moduleName m) `elem` cmd)
+                $ repl (gamma Prelude.<> envSets) m p che
 
-        -- Save typeschemes to interface file
-        exist <- doesDirectoryExist "interface"
-        unless exist (createDirectory "interface")
-        bh <- openBinMem (1024 * 1024)
-        putWithUserData
-            (const $ return ())
-            bh
-            (Map.toList $ Map.filterWithKey (\k _ -> isExternalName k)
-                                            (fmap toIfaceTyCon <$> gamma)
-            )
-        writeBinMem bh (interfaceName (moduleName m))
+            -- Save typeschemes to interface file
+            saveScheme "Sets" gamma
+        else liftIO $ do
+            t0 <- getCPUTime
+            -- Infer constraints
+            let (!gamma, !errs, !stats) =
+                    Horn.runInferM (Horn.inferProg p) m envHorn
+            t1 <- getCPUTime
 
-        return guts
+            when ("time" `elem` cmd) $ recordBenchmarks
+                (moduleNameString (moduleName m))
+                (t0, t1)
+                stats
+
+            -- Display type errors
+            let printErrLn = printSDocLn
+                    PageMode
+                    dflags
+                    stderr
+                    (setStyleColoured True $ defaultErrStyle dflags)
+
+            -- forM_ errs
+            --     $ \a -> when (m == modInfo a) (printErrLn $ showTypeError a)
+
+            when (moduleNameString (moduleName m) `elem` cmd)
+                $ repl (gamma Prelude.<> envHorn) m p che
+
+            -- Save typeschemes to interface file
+            saveScheme "Sets" gamma
+
+
+    return guts
 
   where
     gbl = IfGblEnv { if_doc = text "initIfaceLoad", if_rec_types = Nothing }
 
     reloadSaved
         :: Binary con => FilePath -> CoreM (Map Name (SchemeGen con TyCon))
-    reloadSaved prefix = do
+    reloadSaved suffix = do
         hask <- getHscEnv
         liftIO $ do
             initTcRnIf 'i' hask gbl (mkIfLclEnv m empty False) $ do
                 cache <- mkNameCacheUpdater
                 foldM
                     (\env (mod', _) -> do
-                        let m_name = prefix ++ interfaceName mod'
+                        let m_name = interfaceName mod' ++ suffix
                         exists <- liftIO $ doesFileExist m_name
                         if exists
                             then do
@@ -149,6 +165,19 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                     Map.empty
                     (dep_mods d)
 
+    saveScheme
+        :: Binary con => FilePath -> Map Name (SchemeGen con TyCon) -> IO ()
+    saveScheme suffix gamma = do
+        exist <- doesDirectoryExist "interface"
+        bh    <- openBinMem (1024 * 1024)
+        unless exist (createDirectory "interface")
+        putWithUserData
+            (const $ return ())
+            bh
+            (Map.toList $ Map.filterWithKey (\k _ -> isExternalName k)
+                                            (fmap toIfaceTyCon <$> gamma)
+            )
+        writeBinMem bh (interfaceName (moduleName m) ++ suffix)
 
 {-|
   When @cx@ is the type bindings for all the program so far and @md@
@@ -196,34 +225,6 @@ repl cx md pr ch = Haskeline.runInputT Haskeline.defaultSettings loop
             then md
             else md { moduleName = mkModuleName $ reverse (drop 1 m') }
 
-
-
-{-|
-  Given a trivially unsat constraint @a@, @showTypeError a@ is the 
-  message that we will print out to the user as an SDoc.
--}
-showTypeError :: Atomic -> SDoc
-showTypeError a =
-    blankLine
-        $+$ coloured (colBold Prelude.<> colWhiteFg)
-                     (hang topLine 2 (hang msgLine1 2 msgLine2))
-        $+$ blankLine
-  where
-    topLine =
-        ppr (spanInfo a)
-            GhcPlugins.<> colon
-            <+>           coloured (sWarning defaultScheme) (text "warning:")
-            <+>           lbrack
-            GhcPlugins.<> coloured (sWarning defaultScheme) (text "Intensional")
-            GhcPlugins.<> rbrack
-    msgLine1 =
-        text "Could not verify that"
-            <+> quotes (ppr $ left a)
-            <+> text "from"
-            <+> ppr (getLocation (left a))
-    msgLine2 = text "cannot reach the incomplete match at"
-        <+> ppr (getLocation (right a))
-
 {-|
     Given a GHC interface tycon representation @iftc@,
     @tcIFaceTyCon iftc@ is the action that returns the original tycon.
@@ -235,47 +236,4 @@ tcIfaceTyCon iftc = do
         Type (TyConApp tc _) -> return tc
         _                    -> pprPanic "TyCon has been corrupted!" (ppr e)
 
-data Benchmark = Benchmark
-    { times :: [Integer]
-    , avg   :: Integer
-    , bigN  :: Int
-    , bigK  :: Int
-    , bigD  :: Int
-    , bigV  :: Int
-    , bigI  :: Int
-    }
-    deriving Generic
 
-instance ToJSON Benchmark
-instance FromJSON Benchmark
-
-{-|
-    Given the name of a benchmark @n@ and a beginning @t0@ and end 
-    time @t1@ and statistics @ss@ on the run, @recordBenchmarks n (t0, t1) ss@
-    is the IO action that writes the benchmark data to a JSON file.
--}
-recordBenchmarks :: String -> (Integer, Integer) -> Stats -> IO ()
-recordBenchmarks name (t0, t1) stats = do
-    exist <- doesFileExist "benchmark.json"
-    if exist
-        then decodeFileStrict "benchmark.json" >>= \case
-            Nothing -> encodeFile "benchmark.json" (Map.singleton name new)
-            Just bs -> case Map.lookup name bs of
-                Nothing -> encodeFile "benchmark.json" (Map.insert name new bs)
-                Just bench -> do
-                    let
-                        bench' = updateAverage
-                            $ bench { times = (t1 - t0) : times bench }
-                    encodeFile "benchmark.json" (Map.insert name bench' bs)
-        else encodeFile "benchmark.json" (Map.singleton name new)
-  where
-    updateAverage b =
-        b { avg = sum (times b) `div` toInteger (length (times b)) }
-    new = Benchmark { bigN  = getN stats
-                    , bigD  = getD stats
-                    , bigV  = getV stats
-                    , bigK  = getK stats
-                    , bigI  = getI stats
-                    , times = [t1 - t0]
-                    , avg   = t1 - t0
-                    }

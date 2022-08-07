@@ -29,6 +29,7 @@ library
   exposed-modules:
       Intensional
   other-modules:
+      Display
       Intensional.Types
       Intensional.Constructors
       Intensional.Constraints
