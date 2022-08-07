@@ -73,9 +73,9 @@ instance ShowTypeError Atomic where
 
 instance ShowTypeError HornConstraint where
     mainLoc   = view (_cinfo . to sspn)
-    leftLoc   = const $ UnhelpfulSpan "Placeholder"
-    rightLoc  = const $ UnhelpfulSpan "Placeholder"
-    printLeft = const "PlaceHolder"
+    leftLoc   = const $ UnhelpfulSpan "Nowhere"
+    rightLoc  = const $ UnhelpfulSpan "Nowhere"
+    printLeft = const "Placeholder"
 
 {-|
   Given a trivially unsat constraint @a@, @showTypeError a@ is the 

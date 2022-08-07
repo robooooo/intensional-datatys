@@ -35,16 +35,17 @@ makeLensesFor
     , ("rVar", "_rv")]
     ''Stats
 
-data InferState = InferState
-    { inner :: Stats
-    , errs  :: ConstraintSet
+data InferState con = InferState
+    { stats :: Stats
+    , errs  :: con
     }
 
 makeLensesFor
-    [("inner", "_inner"), ("errs", "_errs")]
+    [("stats", "_stats"), ("errs", "_errs")]
     ''InferState
 
-type InferM = RWS (InferEnv ConstraintSet) ConstraintSet InferState
+type InferM
+    = RWS (InferEnv ConstraintSet) ConstraintSet (InferState ConstraintSet)
 
 class Monad m => MonadInferState m where
     mfresh :: m RVar
@@ -59,10 +60,10 @@ class Monad m => MonadInferState m where
 -- Should probably include debugging in future too?
 instance MonadInferState InferM where
     mfresh = fresh
-    noteK x = modify $ over (_inner . _k) (max x)
-    noteD x = modify $ over (_inner . _d) (max x)
-    noteI x = modify $ over (_inner . _i) (max x)
-    incrN = modify $ over (_inner . _n) (+ 1)
+    noteK x = modify $ over (_stats . _k) (max x)
+    noteD x = modify $ over (_stats . _d) (max x)
+    noteI x = modify $ over (_stats . _i) (max x)
+    incrN = modify $ over (_stats . _n) (+ 1)
 
 -- | Generalise over both types of inference monads.
 class (MonadWriter con m, MonadReader (InferEnv con) m, MonadInferState m)
@@ -89,7 +90,7 @@ data InferEnv con = InferEnv
     , inferLoc :: SrcSpan
     }
 
-initState :: InferState
+initState :: InferState ConstraintSet
 initState = InferState (Stats 0 0 0 0 0) mempty
 
 {-|
@@ -107,10 +108,10 @@ runInferM run mod_name init_env =
             (InferEnv mod_name init_env (UnhelpfulSpan (mkFastString "Nowhere"))
             )
             initState
-        stats = inner s
+        stat = stats s
     in  ( a
         , Constraints.toList (errs s)
-        , Stats (maxK stats) (maxD stats) (rVar stats) (maxI stats) (cntN stats)
+        , Stats (maxK stat) (maxD stat) (rVar stat) (maxI stat) (cntN stat)
         )
 
 -- Transitively remove local constraints
@@ -243,8 +244,8 @@ emitDK _ _ _ = return ()
 -- A fresh refinement variable
 fresh :: InferM RVar
 fresh = do
-    i <- gets $ view (_inner . _rv)
-    modify $ over (_inner . _rv) (+ 1)
+    i <- gets $ view (_stats . _rv)
+    modify $ over (_stats . _rv) (+ 1)
     return i
 
 -- Insert variables into environment

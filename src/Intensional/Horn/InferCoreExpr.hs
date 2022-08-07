@@ -22,11 +22,14 @@ import           Intensional.Horn.Clause
 import           Intensional.Horn.InferCoreSub
 import           Intensional.Horn.Monad
 import           Intensional.InferM             ( InferEnv(..)
-                                                , getExternalName, MonadInferState (..)
+                                                , MonadInferState(..)
+                                                , _errs
+                                                , getExternalName
                                                 )
 import           Intensional.Scheme            as Scheme
 import           Intensional.Types
 import           Intensional.Ubiq
+import           Lens.Micro
 import           Lens.Micro.Extras
 import           Pair
 
@@ -81,10 +84,7 @@ associate r = setLoc
                 (\ss sch -> triviallyUnsat (constraints sch) <> ss)
                 mempty
                 ctx'
-        -- traceM $ showSDocUnsafe (prpr ppr es)
-
-        -- TODO: This is originally @noteErrs es@ and should probably be again.
-        unless (Set.null es) $ error "es"
+        modify $ over _errs (Set.union es)
 
         debugTrace ("End inferring: " ++ bindingNames)
         incrN

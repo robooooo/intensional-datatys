@@ -15,7 +15,7 @@ import           Intensional.Horn.Clause
 import           Intensional.Horn.Constraint
 import           Intensional.InferM             ( BaseContext
                                                 , InferEnv(..)
-                                                , Stats(..)
+                                                , InferState(..)
                                                 , MonadInfer(..)
                                                 , MonadInferState(..)
                                                 , Stats(..)
@@ -24,21 +24,23 @@ import           Intensional.InferM             ( BaseContext
                                                 , _k
                                                 , _n
                                                 , _rv
+                                                , _stats
                                                 )
 import           Intensional.Scheme
 import           Intensional.Types
 import           Lens.Micro
+import           Lens.Micro.Extras
 
 
 
-type InferM = RWS (InferEnv HornSet) HornSet Stats
+type InferM = RWS (InferEnv HornSet) HornSet (InferState HornSet)
 
 instance MonadInferState InferM where
     mfresh = fresh
-    noteK x = modify $ over _k (max x)
-    noteD x = modify $ over _d (max x)
-    noteI x = modify $ over _i (max x)
-    incrN = modify $ over _n (+ 1)
+    noteK x = modify $ over (_stats . _k) (max x)
+    noteD x = modify $ over (_stats . _d) (max x)
+    noteI x = modify $ over (_stats . _i) (max x)
+    incrN = modify $ over (_stats . _n) (+ 1)
 
 instance (MonadInfer HornSet) InferM where
     memitDD = emitDD
@@ -49,18 +51,18 @@ type HornContext = BaseContext HornSet
 
 runInferM :: InferM a -> Module -> HornContext -> (a, HornSet, Stats)
 runInferM run mod_name init_env =
-    let (a, s, w) = runRWS
+    let (a, s, _) = runRWS
             run
             (InferEnv mod_name init_env (UnhelpfulSpan (mkFastString "Nowhere"))
             )
-            (Stats 0 0 0 0 0)
-    in  (a, Set.empty, s)
+            (InferState (Stats 0 0 0 0 0) Set.empty)
+    in  (a, errs s, stats s)
 
 -- | Create a fresh refinement variable.
 fresh :: InferM RVar
 fresh = do
-    i <- gets rVar
-    modify $ over _rv (+ 1)
+    i <- gets (view $ _stats . _rv)
+    modify $ over (_stats . _rv) (+ 1)
     return i
 
 -- | Insert a variable into environment.
