@@ -6,7 +6,8 @@ import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import           Data.Set                       ( Set )
 import qualified GhcPlugins                    as GHC
-import           GhcPlugins                     ( UniqSet
+import           GhcPlugins                     ( SrcSpan
+                                                , UniqSet
                                                 , nonDetEltsUniqSet
                                                 )
 import           Intensional.Constraints
@@ -18,43 +19,49 @@ import           Lens.Micro
 
 -- | Intermediate representation of set expressions, used for @toHorn@.
 data SetExpr a
-    = Constructors (Set a)
+    = Constructors SrcSpan (Set a)
     | Refined Int a
     deriving (Eq, Ord, Show)
 
 -- | Intermediate representation of set constraints, used for @toHorn@.
-type Constr = (Set (GHC.Name, Int), SetExpr GHC.Name, SetExpr GHC.Name)
+type Constr = (Set Atom, SetExpr GHC.Name, SetExpr GHC.Name)
 
 -- | Combinator for constructing intermediate constraints.
 (?) :: Set (GHC.Name, Int) -> (SetExpr GHC.Name, SetExpr GHC.Name) -> Constr
-g ? (l, r) = (g, l, r)
+g ? (l, r) = (Set.map (uncurry $ Atom Nothing) g, l, r)
 
 -- | Translate a single constraint to a set of horn clauses, given a set of
 -- constructors for the underlying type @d@.
 toHorn :: Set GHC.Name -> Constr -> Set (Horn Atom)
 toHorn constructors (guards, lefts, rights) = case (lefts, rights) of
     -- Singleton T/F constructors, I think?
-    (Constructors l1, Constructors l2)
+    (Constructors _ l1, Constructors _ l2)
         | l1 `Set.isSubsetOf` l2 -> Set.empty
         | otherwise              -> Set.singleton (Horn Nothing Set.empty)
 
     (Refined x d1, Refined y d2)
         | d1 == d2 -> Set.map
-            (\k -> mkHornImpl (k, y) $ (k, x) : toList guards)
+            (\k -> mkHornImpl (atomRef k y) $ atomRef k x : toList guards)
             constructors
         | otherwise -> error "Ill-defined constraint!"
 
     -- Could check if l <= constructorsOf d?
-    (Constructors l, Refined x _d) ->
-        Set.singleton $ Horn Nothing $ Set.union (Set.map (, x) l) guards
+    (Constructors s l, Refined x _d) ->
+        Set.singleton $ Horn Nothing $ Set.union (Set.map (atomCon s x) l)
+                                                 guards
 
-    (Refined x _, Constructors l) ->
+    (Refined x _, Constructors s l) ->
         let complement = constructors Set.\\ l
         in  Set.singleton $ Horn Nothing $ Set.union
-                (Set.map (, x) complement)
+                (Set.map (atomCon s x) complement)
                 guards
 
   where
+    atomCon :: SrcSpan -> RVar -> GHC.Name -> Atom
+    atomCon s x kn = Atom (Just s) kn x
+
+    atomRef :: GHC.Name -> RVar -> Atom
+    atomRef = Atom Nothing
 
     mkHornImpl :: Atom -> [Atom] -> Horn Atom
     mkHornImpl head body = Horn (Just head) (Set.fromList body)
@@ -125,7 +132,8 @@ guardHornWith (groups -> g) = Set.map addConstraint
         g
 
     makeProp :: RVar -> UniqSet GHC.Name -> Set Atom
-    makeProp x ks = Set.map (, x) (Set.fromList $ nonDetEltsUniqSet ks)
+    makeProp x ks = Set.map (\kn -> Atom Nothing kn x)
+                            (Set.fromList $ nonDetEltsUniqSet ks)
 
 -- | Restrict a set of horn clauses to those containing only certain variables.  
 restrict :: Ord a => Set a -> Set (Horn a) -> Set (Horn a)

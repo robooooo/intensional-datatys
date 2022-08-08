@@ -8,7 +8,7 @@ module Intensional.Constructors
     , K(..)
     , ConL
     , ConR
-    , toAtomic
+    -- , toAtomic
     , getLocation
     ) where
 
@@ -100,23 +100,23 @@ getLocation (Set _ s) = s
 getLocation _         = error "Dom constructors have no location."
 
 -- Convert constraint to atomic form
-toAtomic :: K l -> K r -> [(K 'L, K 'R)]
-toAtomic (Dom d) (Dom d') | d == d'   = []
-                          | otherwise = [(Dom d, Dom d')]
-toAtomic (Dom d  ) (Con k  l) = [(Dom d, Set (unitUniqSet k) l)]
-toAtomic (Dom d  ) (Set ks l) = [(Dom d, Set ks l)]
-toAtomic (Con k l) (Dom d   ) = [(Con k l, Dom d)]
-toAtomic (Con k l) (Con k' l')
-    | k == k'   = []
-    | otherwise = [(Con k l, Set emptyUniqSet l')]
-toAtomic (Con k l) (Set ks l')
-    | elementOfUniqSet k ks = []
-    | otherwise             = [(Con k l, Set emptyUniqSet l')]
-toAtomic (Set ks l) (Dom d) = [ (Con k l, Dom d) | k <- nonDetEltsUniqSet ks ]
-toAtomic (Set ks l) (Con k l') =
-    [ (Con k l, Set emptyUniqSet l') | k' <- nonDetEltsUniqSet ks, k' /= k ]
-toAtomic (Set ks l) (Set ks' l') =
-    [ (Con k l, Set emptyUniqSet l')
-    | k <- nonDetEltsUniqSet ks
-    , not (elementOfUniqSet k ks')
-    ]
+-- toAtomic :: K l -> K r -> [(K 'L, K 'R)]
+-- toAtomic (Dom d) (Dom d') | d == d'   = []
+--                           | otherwise = [(Dom d, Dom d')]
+-- toAtomic (Dom d  ) (Con k  l) = [(Dom d, Set (unitUniqSet k) l)]
+-- toAtomic (Dom d  ) (Set ks l) = [(Dom d, Set ks l)]
+-- toAtomic (Con k l) (Dom d   ) = [(Con k l, Dom d)]
+-- toAtomic (Con k l) (Con k' l')
+--     | k == k'   = []
+--     | otherwise = [(Con k l, Set emptyUniqSet l')]
+-- toAtomic (Con k l) (Set ks l')
+--     | elementOfUniqSet k ks = []
+--     | otherwise             = [(Con k l, Set emptyUniqSet l')]
+-- toAtomic (Set ks l) (Dom d) = [ (Con k l, Dom d) | k <- nonDetEltsUniqSet ks ]
+-- toAtomic (Set ks l) (Con k l') =
+--     [ (Con k l, Set emptyUniqSet l') | k' <- nonDetEltsUniqSet ks, k' /= k ]
+-- toAtomic (Set ks l) (Set ks' l') =
+--     [ (Con k l, Set emptyUniqSet l')
+--     | k <- nonDetEltsUniqSet ks
+--     , not (elementOfUniqSet k ks')
+--     ]

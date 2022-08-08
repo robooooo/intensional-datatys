@@ -119,11 +119,10 @@ emitKD k s (Inj x d) = unless (typeIsTrivial d) $ do
     let ks = getName <$> tyConDataCons d
         dn = getName d
         kn = getName k
--- a <- mkConFromCtx (Con kn s) (Dom (Inj x dn))
         con =
             toHorn (Set.fromList ks)
                 $ Set.empty
-                ? (Constructors $ Set.singleton kn, Refined x dn)
+                ? (Constructors s $ Set.singleton kn, Refined x dn)
     (addLabels >=> tell) con
 emitKD _ _ _ = return ()
 
@@ -133,10 +132,9 @@ emitDK (Inj x d) ks s =
         let ksFull = dataConName <$> tyConDataCons d
             ksSubs = Set.fromList $ fmap getName ks
             dn     = getName d
--- a <- mkConFromCtx (Dom (Inj x dn)) (Set ksn s)
             con =
                 toHorn (Set.fromList ksFull)
                     $ Set.empty
-                    ? (Refined x dn, Constructors ksSubs)
+                    ? (Refined x dn, Constructors s ksSubs)
         (addLabels >=> tell) con
 emitDK _ _ _ = return ()

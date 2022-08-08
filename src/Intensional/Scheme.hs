@@ -10,8 +10,10 @@ module Intensional.Scheme
     , pattern Forall
     , mono
     , Intensional.Scheme.unsats
-    , AtomF
-    , Atom
+    , Atom(..)
+    , _span
+    , _name
+    , _rvar
     , HornConstraint(..)
     , _cinfo
     , _horn
@@ -39,9 +41,16 @@ import           Lens.Micro.TH                  ( makeLensesFor )
 
 -- | The type of propositional atoms.
 -- Pair of a constructor and a refinement variable.
-type AtomF a = (a, RVar)
-
-type Atom = AtomF GHC.Name
+-- May also include a @SrcSpan@.
+data Atom = Atom
+    { atomSpan :: Maybe SrcSpan
+    , atomName :: GHC.Name
+    , atomRVar :: RVar
+    }
+    deriving (Eq, Ord)
+makeLensesFor
+    [("atomSpan", "_span"), ("atomName", "_name"), ("atomRVar", "_rvar")]
+    ''Atom
 
 data HornConstraint = HornConstraint
     { hornConInfo  :: CInfo
@@ -90,6 +99,10 @@ instance (Binary a, Ord a) => Binary (Set a) where
 instance (Binary a, Ord a) => Binary (Horn a) where
     put_ bh (Horn hhead body) = put_ bh (hhead, body)
     get bh = uncurry Horn <$> get bh
+
+instance Binary Atom where
+    put_ bh (Atom src k rv) = put_ bh (src, k, rv)
+    get bh = uncurry3 Atom <$> get bh
 
 instance Binary HornConstraint where
     put_ bh (HornConstraint ci horn) = put_ bh (ci, horn)
@@ -149,10 +162,10 @@ instance (Ord a, Refined a) => Refined (Set a) where
         ]
 
 instance Refined Atom where
-    domain (_, x) = I.singleton x
-    rename x y (k, rv) | rv == x   = (k, y)
-                       | otherwise = (k, rv)
-    prpr m (k, x) = hcat [m x, "_", ppr k]
+    domain (Atom _ _ x) = I.singleton x
+    rename x y (Atom src k rv) | rv == x   = Atom src k y
+                               | otherwise = Atom src k rv
+    prpr m (Atom _ k x) = hcat [m x, "_", ppr k]
 
 instance (Ord a, Refined a) => Refined (Horn a) where
     domain = I.unions . Set.map domain . variables

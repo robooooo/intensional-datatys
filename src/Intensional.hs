@@ -69,7 +69,7 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
     che    <- getOrigNameCache
     dflags <- getDynFlags
 
-    let useSetConstrs = False
+    let useSetConstrs = True
     -- Reload saved typeschemes
     envHorn <- reloadSaved "Horn"
     envSets <- reloadSaved "Set"
