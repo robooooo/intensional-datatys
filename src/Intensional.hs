@@ -69,7 +69,7 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
     che    <- getOrigNameCache
     dflags <- getDynFlags
 
-    let useSetConstrs = True
+    let useSetConstrs = False
     -- Reload saved typeschemes
     envHorn <- reloadSaved "Horn"
     envSets <- reloadSaved "Set"
@@ -94,8 +94,8 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                     stderr
                     (setStyleColoured True $ defaultErrStyle dflags)
 
-            forM_ errs
-                $ \a -> when (m == modInfo a) (printErrLn $ showTypeError a)
+            forM_ (makeSetErrors errs)
+                $ \a -> when (m == mName a) (printErrLn $ showTypeError a)
 
             when (moduleNameString (moduleName m) `elem` cmd)
                 $ repl (gamma Prelude.<> envSets) m p che
@@ -121,9 +121,8 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                     stderr
                     (setStyleColoured True $ defaultErrStyle dflags)
 
-            forM_ errs
-                $ \a -> when (m == view (_cinfo . to prov) a)
-                             (printErrLn $ showTypeError a)
+            forM_ (makeHornErrors errs)
+                $ \a -> when (m == mName a) (printErrLn $ showTypeError a)
 
             when (moduleNameString (moduleName m) `elem` cmd)
                 $ repl (gamma Prelude.<> envHorn) m p che
