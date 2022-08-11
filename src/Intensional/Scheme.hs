@@ -47,10 +47,14 @@ data Atom = Atom
     , atomName :: GHC.Name
     , atomRVar :: RVar
     }
-    deriving (Eq, Ord)
 makeLensesFor
     [("atomSpan", "_span"), ("atomName", "_name"), ("atomRVar", "_rvar")]
     ''Atom
+
+instance Eq Atom where
+    a == b = atomName a == atomName b && atomRVar a == atomRVar b
+deriving instance Ord Atom
+
 
 data HornConstraint = HornConstraint
     { hornConInfo  :: CInfo
@@ -157,7 +161,19 @@ instance (Ord a, Refined a) => Refined (Set a) where
     domain = I.unions . Set.map domain
     rename x y = Set.map (rename x y)
     prpr m xs = hcat
-        [ "Set.fromList "
+        [ "Set.fromList ("
+        , int (Set.size xs)
+        , ") "
+        , brackets (fsep (punctuate comma (prpr m <$> toList xs)))
+        ]
+
+instance Refined a => Refined [a] where
+    domain = I.unions . fmap domain
+    rename x y = fmap (rename x y)
+    prpr m xs = hcat
+        [ "("
+        , int (length xs)
+        , ") "
         , brackets (fsep (punctuate comma (prpr m <$> toList xs)))
         ]
 

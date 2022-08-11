@@ -37,10 +37,6 @@ type Path = [(CoreExpr, DataCon)]
 
 type Context = M.Map Name Scheme
 
-instance Refined Context where
-  domain = foldMap domain
-  rename x y = fmap (rename x y)
-
 data InferEnv
   = InferEnv
       { modName :: Module, -- The current module

@@ -13,6 +13,9 @@ import qualified Data.IntSet                   as IS
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
+import           Debug.Trace                    ( traceId
+                                                , traceShowId
+                                                )
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
                                                 )
@@ -45,7 +48,7 @@ saturateRestrict ma = pass $ do
     return (a, satRes (CInfo m src) interface)
   where
     satRes ci iface cs =
-        let saturated = saturate (Set.map (view _horn) cs)
+        let saturated = sldSaturate (Set.map (view _horn) cs)
             labelled  = Set.map (HornConstraint ci) saturated
         in  Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) labelled
 
@@ -75,15 +78,15 @@ associate r = setLoc
         debugTrace ("Begin inferring: " ++ bindingNames)
         env       <- asks varEnv
         (ctx, cs) <- listen $ inferRec r
+        debugTrace $ "cs is " ++ showSDocUnsafe (prpr int cs)
 
         -- add constraints to every type in the recursive group
-        ctx'      <- mapM (satAction cs env) ctx
+        ctx' <- mapM (satAction cs env) ctx
+        debugTrace $ "ctx' is " ++ showSDocUnsafe (prpr int ctx')
+
         -- note down any counterexamples
-        let
-            es = Map.foldl'
-                (\ss sch -> triviallyUnsat (constraints sch) <> ss)
-                mempty
-                ctx'
+        let es = triviallyUnsat $ Set.unions (constraints <$> Map.elems ctx')
+        debugTrace $ "es is " ++ showSDocUnsafe (prpr int es)
         modify $ over _errs (Set.union es)
 
         debugTrace ("End inferring: " ++ bindingNames)
@@ -92,11 +95,11 @@ associate r = setLoc
 
     satAction :: HornSet -> HornContext -> HornScheme -> InferM HornScheme
     satAction cs env s = do
-        cs' <- snd <$> listen (saturateRestrict (tell cs >> return s))
         -- Attempt to build a model and record counterexamples
-        let es = triviallyUnsat cs'
+        cs' <- snd <$> listen (saturateRestrict (tell cs >> return s))
+        debugTrace $ "cs' is " ++ showSDocUnsafe (prpr int cs')
         return $ s { boundvs = (domain cs' <> domain s) I.\\ domain env
-                   , Scheme.constraints = es <> cs'
+                   , Scheme.constraints = cs'
                    }
 
 -- Infer constraints for a mutually recursive binders

@@ -1,6 +1,5 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-{-# LANGUAGE TupleSections #-}
 module Intensional.Horn.Constraint where
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
@@ -123,7 +122,7 @@ guardHornWith :: Guard -> HornSet -> HornSet
 guardHornWith (groups -> g) = Set.map addConstraint
   where
     addConstraint :: HornConstraint -> HornConstraint
-    addConstraint = over _horn (addGuard guardProps)
+    addConstraint = over _horn (addGuards guardProps)
 
     guardProps :: Set Atom
     guardProps = Map.foldlWithKey'
