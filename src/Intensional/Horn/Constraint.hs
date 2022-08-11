@@ -66,8 +66,7 @@ toHorn constructors (guards, lefts, rights) = case (lefts, rights) of
 
     (Refined x _d, Constructors span ks) ->
         let complement = constructors Set.\\ ks
-        in  Set.map (\kn -> Horn (Just $ atomCon span x kn) Set.empty)
-                    complement
+        in  Set.map (Horn Nothing . Set.singleton . atomCon span x) complement
 
   where
     atomCon :: SrcSpan -> RVar -> GHC.Name -> Atom
