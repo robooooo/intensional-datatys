@@ -78,15 +78,15 @@ associate r = setLoc
         debugTrace ("Begin inferring: " ++ bindingNames)
         env       <- asks varEnv
         (ctx, cs) <- listen $ inferRec r
-        debugTrace $ "cs is " ++ showSDocUnsafe (prpr int cs)
+        debugTrace $ "cs is " ++ traceRefined cs
 
         -- add constraints to every type in the recursive group
         ctx' <- mapM (satAction cs env) ctx
-        debugTrace $ "ctx' is " ++ showSDocUnsafe (prpr int ctx')
+        debugTrace $ "ctx' is " ++ traceRefined ctx'
 
         -- note down any counterexamples
         let es = triviallyUnsat $ Set.unions (constraints <$> Map.elems ctx')
-        debugTrace $ "es is " ++ showSDocUnsafe (prpr int es)
+        debugTrace $ "es is " ++ traceRefined es
         modify $ over _errs (Set.union es)
 
         debugTrace ("End inferring: " ++ bindingNames)

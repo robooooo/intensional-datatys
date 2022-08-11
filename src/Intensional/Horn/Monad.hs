@@ -28,6 +28,7 @@ import           Intensional.InferM             ( BaseContext
                                                 )
 import           Intensional.Scheme
 import           Intensional.Types
+import           Intensional.Ubiq               ( debugTrace )
 import           Lens.Micro
 import           Lens.Micro.Extras
 
@@ -106,35 +107,39 @@ addLabels horns = do
 
 emitDD :: DataType TyCon -> DataType TyCon -> InferM ()
 emitDD (Inj x d) (Inj y _) = unless (typeIsTrivial d) $ do
-    let ks = getName <$> tyConDataCons d
-        dn = getName d
--- a <- mkConFromCtx (Dom (Inj x dn)) (Dom (Inj y dn))
-        con =
-            toHorn (Set.fromList ks) $ Set.empty ? (Refined x dn, Refined y dn)
-    (addLabels >=> tell) con
+    let ks      = getName <$> tyConDataCons d
+        dn      = getName d
+        setsCon = Set.empty ? (Refined x dn, Refined y dn)
+        hornCon = toHorn (Set.fromList ks) setsCon
+
+    debugTrace ("Emit (in ): " ++ traceRefined setsCon)
+    debugTrace ("Emit (out): " ++ traceRefined hornCon)
+    (addLabels >=> tell) hornCon
 emitDD _ _ = return ()
 
 emitKD :: DataCon -> SrcSpan -> DataType TyCon -> InferM ()
 emitKD k s (Inj x d) = unless (typeIsTrivial d) $ do
-    let ks = getName <$> tyConDataCons d
-        dn = getName d
-        kn = getName k
-        con =
-            toHorn (Set.fromList ks)
-                $ Set.empty
-                ? (Constructors s $ Set.singleton kn, Refined x dn)
-    (addLabels >=> tell) con
+    let ks      = getName <$> tyConDataCons d
+        dn      = getName d
+        kn      = getName k
+        setsCon = Set.empty ? (Constructors s $ Set.singleton kn, Refined x dn)
+        hornCon = toHorn (Set.fromList ks) setsCon
+
+    debugTrace ("Emit (in ): " ++ traceRefined setsCon)
+    debugTrace ("Emit (out): " ++ traceRefined hornCon)
+    (addLabels >=> tell) hornCon
 emitKD _ _ _ = return ()
 
 emitDK :: DataType TyCon -> [DataCon] -> SrcSpan -> InferM ()
 emitDK (Inj x d) ks s =
     unless (typeIsTrivial d || length (tyConDataCons d) == length ks) $ do
-        let ksFull = dataConName <$> tyConDataCons d
-            ksSubs = Set.fromList $ fmap getName ks
-            dn     = getName d
-            con =
-                toHorn (Set.fromList ksFull)
-                    $ Set.empty
-                    ? (Refined x dn, Constructors s ksSubs)
-        (addLabels >=> tell) con
+        let ksFull  = dataConName <$> tyConDataCons d
+            ksSubs  = Set.fromList $ fmap getName ks
+            dn      = getName d
+            setsCon = Set.empty ? (Refined x dn, Constructors s ksSubs)
+            hornCon = toHorn (Set.fromList ksFull) setsCon
+
+        debugTrace ("Emit (in ): " ++ traceRefined setsCon)
+        debugTrace ("Emit (out): " ++ traceRefined hornCon)
+        (addLabels >=> tell) hornCon
 emitDK _ _ _ = return ()

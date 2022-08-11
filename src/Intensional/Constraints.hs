@@ -486,8 +486,7 @@ cexs ci = saturate ci mempty
 fix :: CInfo -> IntSet -> State (ConstraintSet, ConstraintSet) ()
 fix ci exts = do
     (ls, rs) <- State.get
-    Monad.when debugging $ traceM
-        ("#ls = " ++ show (size ls) ++ ", #rs = " ++ show (size rs))
+    debugTrace ("#ls = " ++ show (size ls) ++ ", #rs = " ++ show (size rs))
     Monad.unless (null ls) $ saturate1 ci exts >> fix ci exts
 
 {-| 

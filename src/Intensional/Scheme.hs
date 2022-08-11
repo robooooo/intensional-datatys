@@ -131,20 +131,20 @@ instance (Refined con, Eq con, Monoid con, Outputable d)
                  , constraints = rename x y (constraints s)
                  }
 
-    prpr _ scheme
+    prpr disp scheme
         | constraints scheme /= mempty = hang
-            (hcat [pprTyQuant, pprConQuant, prpr varMap (body scheme)])
+            (hcat [pprTyQuant, pprConQuant, prpr disp (body scheme)])
             2
-            (hang (text "where") 2 (prpr varMap (constraints scheme)))
-        | otherwise = hcat [pprTyQuant, pprConQuant, prpr varMap (body scheme)]
+            (hang (text "where") 2 (prpr disp (constraints scheme)))
+        | otherwise = hcat [pprTyQuant, pprConQuant, prpr disp (body scheme)]
       where
-        numVars  = I.size (boundvs scheme)
-        varNames = if numVars > 3
-            then [ char 'X' GhcPlugins.<> int n | n <- [1 .. numVars] ]
-            else [ char c | c <- ['X', 'Y', 'Z'] ]
-        varMap = (m IntMap.!)
-          where
-            m = IntMap.fromList $ zip (I.toAscList (boundvs scheme)) varNames
+        -- numVars  = I.size (boundvs scheme)
+        -- varNames = if numVars > 3
+        --     then [ char 'X' GhcPlugins.<> int n | n <- [1 .. numVars] ]
+        --     else [ char c | c <- ['X', 'Y', 'Z'] ]
+        -- varMap = (m IntMap.!)
+        --   where
+        --     m = IntMap.fromList $ zip (I.toAscList (boundvs scheme)) varNames
         pprTyQuant
             | null (tyvars scheme) = empty
             | otherwise = hcat
@@ -154,9 +154,7 @@ instance (Refined con, Eq con, Monoid con, Outputable d)
             = empty
             | otherwise
             = hcat
-                [ forAllLit <+> fsep (map varMap $ I.toList (boundvs scheme))
-                , dot
-                ]
+                [forAllLit <+> fsep (map disp $ I.toList (boundvs scheme)), dot]
 instance (Ord a, Refined a) => Refined (Set a) where
     domain = I.unions . Set.map domain
     rename x y = Set.map (rename x y)
@@ -187,10 +185,16 @@ instance (Ord a, Refined a) => Refined (Horn a) where
     domain = I.unions . Set.map domain . variables
     rename x y = over (_head . _Just) (rename x y) . over _body (rename x y)
     prpr m horn =
-        let implHead = maybe "False" (prpr m) (view _head horn)
-            implBodies =
-                punctuate " & " $ (fmap $ prpr m) (toList $ view _body horn)
-        in  hcat $ implBodies ++ [" => ", implHead]
+        let
+            implHead   = maybe "False" (prpr m) (view _head horn)
+            body       = view _body horn
+
+            implBodies = if (not . null) body
+                then punctuate " & "
+                    $ (fmap $ prpr m) (toList $ view _body horn)
+                else [text "True"]
+        in
+            hcat $ implBodies ++ [" => ", implHead]
 
 instance Refined HornConstraint where
     domain = domain . view _horn

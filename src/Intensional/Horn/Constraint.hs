@@ -1,14 +1,12 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module Intensional.Horn.Constraint where
+import qualified Data.IntSet                   as IS
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
 import           Data.Set                       ( Set )
 import qualified GhcPlugins                    as GHC
-import           GhcPlugins                     ( SrcSpan
-                                                , UniqSet
-                                                , nonDetEltsUniqSet
-                                                )
+import           GhcPlugins
 import           Intensional.Constraints
 import           Intensional.Guard              ( Guard(groups) )
 import           Intensional.Horn.Clause
@@ -24,6 +22,24 @@ data SetExpr a
 
 -- | Intermediate representation of set constraints, used for @toHorn@.
 type Constr = (Set Atom, SetExpr GHC.Name, SetExpr GHC.Name)
+
+instance Outputable a => Refined (SetExpr a) where
+    domain (Refined rv _) = IS.singleton rv
+    domain _              = IS.empty
+
+    rename x y (Refined rv k) | rv == x = Refined y k
+    rename _ _ other                    = other
+
+    prpr _ (Constructors _ ks) =
+        let kns = fmap ppr (toList ks)
+        in  hcat ["{", fsep (punctuate ", " kns), "}"]
+    prpr m (Refined rv k) = hcat [m rv, "(", ppr k, ")"]
+
+instance Refined Constr where
+    domain (g, l, r) = IS.unions [domain g, domain l, domain r]
+    rename x y (g, l, r) = (rename x y g, rename x y l, rename x y r)
+    prpr m (g, l, r) = hcat [prpr m g, " ? ", prpr m l, " <= ", prpr m r]
+
 
 -- | Combinator for constructing intermediate constraints.
 (?) :: Set (GHC.Name, Int) -> (SetExpr GHC.Name, SetExpr GHC.Name) -> Constr
@@ -45,15 +61,13 @@ toHorn constructors (guards, lefts, rights) = case (lefts, rights) of
         | otherwise -> error "Ill-defined constraint!"
 
     -- Could check if l <= constructorsOf d?
-    (Constructors s l, Refined x _d) ->
-        Set.singleton $ Horn Nothing $ Set.union (Set.map (atomCon s x) l)
-                                                 guards
+    (Constructors span ks, Refined x _d) ->
+        Set.map (\kn -> Horn (Just $ atomCon span x kn) Set.empty) ks
 
-    (Refined x _, Constructors s l) ->
-        let complement = constructors Set.\\ l
-        in  Set.singleton $ Horn Nothing $ Set.union
-                (Set.map (atomCon s x) complement)
-                guards
+    (Refined x _d, Constructors span ks) ->
+        let complement = constructors Set.\\ ks
+        in  Set.map (\kn -> Horn (Just $ atomCon span x kn) Set.empty)
+                    complement
 
   where
     atomCon :: SrcSpan -> RVar -> GHC.Name -> Atom
@@ -109,7 +123,7 @@ toHorn constructors (guards, lefts, rights) = case (lefts, rights) of
 --         guards
 
 --     intoSet :: K r -> SetExpr GHC.Name
---     intoSet (Set ks _     ) = Constructors (Set.fromList $ nonDetEltsUniqSet ks)
+--     intoSet (Set ks _     ) = Constructors (Set.fromList $ nonDetEltsUniqSet 1)
 --     intoSet (Con k  _     ) = Constructors (Set.singleton k)
 --     -- Base datatypes can't be refined, so what to do about this?
 --     intoSet (Dom (Base _ )) = error "not sure yet"

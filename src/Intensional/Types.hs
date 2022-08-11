@@ -5,9 +5,9 @@ module Intensional.Types
     , DataType(..)
     , Type
     , TypeGen(..)
-    ,
-    -- inj,
-      decompType
+    , traceRefined
+    -- , inj
+    , decompType
     , subTyVar
     , tyconOf
     ) where
@@ -30,9 +30,14 @@ type Domain = I.IntSet
 
 -- The class of objects containing refinement variables
 class Refined t where
-  domain :: t -> Domain
-  rename :: RVar -> RVar -> t -> t
-  prpr   :: (RVar -> SDoc) -> t -> SDoc
+    domain :: t -> Domain
+    rename :: RVar -> RVar -> t -> t
+    prpr   :: (RVar -> SDoc) -> t -> SDoc
+
+traceRefined :: Refined a => a -> String
+traceRefined ref =
+    let res = (showSDocUnsafe . prpr int) ref
+    in  if null res then "empty" else res
 
 instance Refined b => Refined (Map a b) where
     domain = foldMap domain

@@ -75,10 +75,10 @@ inferSubType t1 t2 = do
 
     when debugging $ do
         src <- asks inferLoc
-        traceM ("[TRACE] Starting subtype inference at " ++ traceSpan src)
+        debugTrace ("Starting subtype inference at " ++ traceSpan src)
         let sz = Constraints.size cs
-        traceM
-            (  "[TRACE] The subtype proof at "
+        debugTrace
+            (  "The subtype proof at "
             ++ traceSpan src
             ++ " contributed "
             ++ show sz
@@ -146,12 +146,13 @@ associate r = setLoc
     doAssoc
   where
     bindingNames = show $ map (occNameString . occName) (bindersOf r)
-    
+
     doAssoc :: InferM Context
     doAssoc = do
         debugTrace ("Begin inferring: " ++ bindingNames)
         env       <- asks varEnv
         (ctx, cs) <- listen $ inferRec r
+        debugTrace $ "cs is " ++ traceRefined cs
         let satAction s = do
                 cs' <- snd <$> listen (saturate (tell cs >> return s))
                 -- Attempt to build a model and record counterexamples
@@ -161,8 +162,10 @@ associate r = setLoc
                            }
         -- add constraints to every type in the recursive group
         ctx' <- mapM satAction ctx
+        debugTrace $ "ctx' is " ++ traceRefined ctx'
         -- note down any counterexamples
         let es = M.foldl' (\ss sch -> Scheme.unsats sch <> ss) mempty ctx'
+        debugTrace $ "es is " ++ traceRefined es
         noteErrs es
         debugTrace ("End inferring: " ++ bindingNames)
         incrN
