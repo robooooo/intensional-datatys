@@ -48,7 +48,7 @@ saturateRestrict ma = pass $ do
     return (a, satRes (CInfo m src) interface)
   where
     satRes ci iface cs =
-        let saturated = sldSaturate (Set.map (view _horn) cs)
+        let saturated = saturate (Set.map (view _horn) cs)
             labelled  = Set.map (HornConstraint ci) saturated
         in  Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) labelled
 

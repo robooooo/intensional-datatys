@@ -56,17 +56,18 @@ canonicize = filter (not . isTrivial)
 addGuards :: Ord a => Set a -> Horn a -> Horn a
 addGuards extra = over _body (`union` extra)
 
--- SLD resolution with the first head @x@ as the resolvent. The second clause
--- must be a goal clause that contains @x@ in the body.
-sld :: Ord a => Horn a -> Horn a -> Maybe (Horn a)
-sld (Horn (Just x) body1) (Horn Nothing body2)
-    | x `elem` body2 = (Just . Horn Nothing . delete x) (body1 `union` body2)
-    | otherwise      = Nothing
-sld _ _ = Nothing
+-- Resolution with the first head @x@ as the resolvent. The second clause must 
+-- contain @x@ in the body.
+resolve :: Ord a => Horn a -> Horn a -> Maybe (Horn a)
+resolve (Horn (Just x) body1) (Horn mayHead body2)
+    | Just x == mayHead = Nothing
+    | x `elem` body2    = (Just . Horn Nothing . delete x) (body1 `union` body2)
+    | otherwise         = Nothing
+resolve _ _ = Nothing
 
--- | Saturate a conjunctive set of horn clauses under SLD resolution.
-sldSaturate :: forall a . Ord a => Set (Horn a) -> Set (Horn a)
-sldSaturate clauses = go clauses clauses clauses
+-- | Saturate a conjunctive set of horn clauses under resolution.
+saturate :: forall a . Ord a => Set (Horn a) -> Set (Horn a)
+saturate clauses = go clauses clauses clauses
   where
     -- | Perform one 'round' of saturation over every pair of variables between
     -- two sets, then recurse by finding any new resolvents that can be
@@ -79,7 +80,7 @@ sldSaturate clauses = go clauses clauses clauses
                     , cartesianProduct b a
                     , cartesianProduct b b
                     ]
-            boundary = mapMaybe (uncurry sld) pairs
+            boundary = mapMaybe (uncurry resolve) pairs
             next     = union prev boundary
         in  if prev == next then next else go next prev boundary
 
