@@ -4,12 +4,17 @@ module Intensional.Horn.Constraints where
 
 
 import           Binary
+import           Control.Applicative            ( Alternative((<|>)) )
+import           Control.Monad                  ( liftM2 )
 import qualified Data.IntSet                   as I
 import           Data.Set                       ( Set )
 import qualified GHC
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
-import           Intensional.Horn.Clause        ( Horn(..) )
+import           Intensional.Horn.Clause        ( Horn(..)
+                                                , resolve
+                                                , saturateUnder
+                                                )
 import           Intensional.Scheme
 import           Intensional.Types
 import           Lens.Micro              hiding ( _head )
@@ -48,6 +53,24 @@ makeLensesFor
     , ("hornConInfo", "_cinfo")
     , ("hornConInner", "_horn")]
     ''HornConstraint
+
+-- | @resolve@ that propagates @SrcSpan@ and naming information.
+resolveCons
+    :: CInfo -> HornConstraint -> HornConstraint -> Maybe HornConstraint
+resolveCons ci left right = addInfo
+    <$> resolve (view _horn left) (view _horn right)
+  where
+    addInfo horn = HornConstraint
+        { hornConLeftSpan  = liftM2 combineSrcSpans
+                                    (view _lspan left)
+                                    (view _lspan right)
+        , hornConRightSpan = view _rspan right <|> view _rspan left
+        , hornConInner     = horn
+        , hornConInfo      = ci
+        }
+
+saturateCons :: CInfo -> HornSet -> HornSet
+saturateCons ci = saturateUnder (resolveCons ci)
 
 instance Binary Atom where
     put_ bh (Atom k rv) = put_ bh (k, rv)

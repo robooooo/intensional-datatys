@@ -104,6 +104,7 @@ instance (Refined con, Eq con, Monoid con, Outputable d)
             | otherwise
             = hcat
                 [forAllLit <+> fsep (map disp $ I.toList (boundvs scheme)), dot]
+
 instance (Ord a, Refined a) => Refined (Set a) where
     domain = I.unions . Set.map domain
     rename x y = Set.map (rename x y)
@@ -124,8 +125,6 @@ instance Refined a => Refined [a] where
         , brackets (fsep (punctuate comma (prpr m <$> toList xs)))
         ]
 
-
-
 instance (Ord a, Refined a) => Refined (Horn a) where
     domain = I.unions . Set.map domain . variables
     rename x y = over (_head . _Just) (rename x y) . over _body (rename x y)
@@ -140,6 +139,7 @@ instance (Ord a, Refined a) => Refined (Horn a) where
                 else [text "True"]
         in
             hcat $ implBodies ++ [" => ", implHead]
+            
 -- Demand a monomorphic type
 mono :: Monoid con => SchemeGen con d -> TypeGen d
 mono (Forall [] t) = t

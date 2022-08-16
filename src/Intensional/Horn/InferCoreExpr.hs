@@ -19,6 +19,7 @@ import           GhcPlugins              hiding ( (<>)
 import           Intensional.Constraints        ( CInfo(..) )
 import           Intensional.FromCore
 import           Intensional.Horn.Clause
+import           Intensional.Horn.Constraints
 import           Intensional.Horn.InferCoreSub
 import           Intensional.Horn.Monad
 import           Intensional.InferM             ( InferEnv(..)
@@ -32,7 +33,6 @@ import           Intensional.Ubiq
 import           Lens.Micro
 import           Lens.Micro.Extras
 import           Pair
-import Intensional.Horn.Constraints
 
 -- | Saturate and restrict every element of the @Writer@ environment.
 saturateRestrict :: Refined a => InferM a -> InferM a
@@ -46,9 +46,7 @@ saturateRestrict ma = pass $ do
     return (a, satRes (CInfo m src) interface)
   where
     satRes ci iface cs =
-        let saturated = saturate (Set.map (view _horn) cs)
-            labelled  = Set.map (HornConstraint Nothing Nothing ci) saturated
-        in  Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) labelled
+        Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) (saturateCons ci cs)
 
 -- Infer constraints for a module
 inferProg :: CoreProgram -> InferM HornContext

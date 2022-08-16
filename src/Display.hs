@@ -8,9 +8,6 @@ import           GhcPlugins
 import           Intensional.Constraints
 import           Intensional.Constructors
 import           Intensional.InferM
-import           Intensional.Scheme
-import           Lens.Micro
-import           Lens.Micro.Extras
 import           PprColour
 import           System.Directory
 import Intensional.Horn.Constraints

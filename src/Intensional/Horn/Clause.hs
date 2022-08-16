@@ -61,14 +61,13 @@ resolve (Horn (Just x) body1) (Horn Nothing body2)
     | otherwise      = Nothing
 resolve _ _ = Nothing
 
--- | Saturate a conjunctive set of horn clauses under resolution.
-saturate :: forall a . Ord a => Set (Horn a) -> Set (Horn a)
-saturate clauses = go clauses clauses clauses
+saturateUnder :: forall a . Ord a => (a -> a -> Maybe a) -> Set a -> Set a
+saturateUnder f initial = go initial initial initial
   where
     -- | Perform one 'round' of saturation over every pair of variables between
     -- two sets, then recurse by finding any new resolvents that can be
     -- generated from pairs where at least one of the elements is new.
-    go :: Set (Horn a) -> Set (Horn a) -> Set (Horn a) -> Set (Horn a)
+    go :: Set a -> Set a -> Set a -> Set a
     go prev a b =
         let pairs =
                 unions
@@ -76,12 +75,17 @@ saturate clauses = go clauses clauses clauses
                     , cartesianProduct b a
                     , cartesianProduct b b
                     ]
-            boundary = mapMaybe (uncurry resolve) pairs
+            boundary = mapMaybe (uncurry f) pairs
             next     = union prev boundary
         in  if prev == next then next else go next prev boundary
 
     mapMaybe :: Ord u => (t -> Maybe u) -> Set t -> Set u
-    mapMaybe f = map fromJust . filter isJust . map f
+    mapMaybe g = map fromJust . filter isJust . map g
+
+
+-- | Saturate a conjunctive set of horn clauses under resolution.
+saturate :: forall a . Ord a => Set (Horn a) -> Set (Horn a)
+saturate = saturateUnder resolve
 
 -- | Use the generalised resolution rule to remove a variable @x@ from a 
 -- conjunctive set of horn clauses.

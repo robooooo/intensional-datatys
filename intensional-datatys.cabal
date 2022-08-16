@@ -48,7 +48,7 @@ library
   hs-source-dirs:
       src
   cpp-options:
-      -DDEBUG
+    --   -DDEBUG
   ghc-options:
       -Wall
       -Wcompat
