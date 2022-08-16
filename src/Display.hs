@@ -1,26 +1,13 @@
 module Display where
 
-import           Control.Monad                  ( when )
-import qualified Control.Monad                 as Monad
 import           Data.Aeson
-import           Data.Functor                   ( (<&>) )
-import qualified Data.List                     as List
-import           Data.List                      ( nub )
 import qualified Data.Map                      as Map
-import           Data.Maybe                     ( catMaybes
-                                                , mapMaybe
-                                                )
 import           GHC.Generics                   ( Generic )
 import           GhcPlugins
 import           Intensional.Constraints
 import           Intensional.Constructors
-import           Intensional.Horn.Clause        ( _body
-                                                , _head
-                                                )
 import           Intensional.InferM
 import           Intensional.Scheme
-import           Lens.Micro                     ( to )
-import           Lens.Micro.Extras
 import           PprColour
 import           System.Directory
 
@@ -93,32 +80,31 @@ makeSetErrors = fmap mkErr
                         }
 
 makeHornErrors :: HornSet -> [TypeError SDoc]
-makeHornErrors = fmap pprName . nub . mapMaybe mkErr . toList
-  where
-    mkErr hc = do
-        hornHead <- view (_horn . _head) hc
-        headSpan <- atomSpan hornHead
-        -- The body of this horn clause should have one atom with a @SrcSpan@.
-        -- This is the left side, whereas the others are any guards.
-        let hornBody = view (_horn . _body . to toList) hc
-            withSpan = catMaybes
-                (hornBody <&> \atom -> case atomSpan atom of
-                    Just loc -> Just (loc, atomName atom)
-                    Nothing  -> Nothing
-                )
-        Monad.guard $ (not . List.null) withSpan
-        let (leftSpan, leftName) = case withSpan of
-                [(ls, ln)] -> (ls, ln)
-                _          -> error "More than one atom is has a span!"
+makeHornErrors _ = trace "Displaying horn errors is not implemented!" []
+    -- mkErr hc = do
+    --     hornHead <- view (_horn . _head) hc
+    --     headSpan <- atomSpan hornHead
+    --     -- The body of this horn clause should have one atom with a @SrcSpan@.
+    --     -- This is the left side, whereas the others are any guards.
+    --     let hornBody = view (_horn . _body . to toList) hc
+    --         withSpan = catMaybes
+    --             (hornBody <&> \atom -> case atomSpan atom of
+    --                 Just loc -> Just (loc, atomName atom)
+    --                 Nothing  -> Nothing
+    --             )
+    --     Monad.guard $ (not . List.null) withSpan
+    --     let (leftSpan, leftName) = case withSpan of
+    --             [(ls, ln)] -> (ls, ln)
+    --             _          -> error "More than one atom is has a span!"
 
-        return $ TypeError { mName           = view (_cinfo . to prov) hc
-                           , mainLoc         = view (_cinfo . to sspn) hc
-                           , constructorName = leftName
-                           , rightLoc        = headSpan
-                           , leftLoc         = leftSpan
-                           }
+    --     return $ TypeError { mName           = view (_cinfo . to prov) hc
+    --                        , mainLoc         = view (_cinfo . to sspn) hc
+    --                        , constructorName = leftName
+    --                        , rightLoc        = headSpan
+    --                        , leftLoc         = leftSpan
+    --                        }
 
-    pprName err = err { constructorName = (ppr . constructorName) err }
+    -- pprName err = err { constructorName = (ppr . constructorName) err }
 
 
 -- instance ShowTypeError Atomic where

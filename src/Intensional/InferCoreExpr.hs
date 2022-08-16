@@ -11,7 +11,6 @@ import           Data.Bifunctor
 import qualified Data.IntSet                   as I
 import qualified Data.List                     as L
 import qualified Data.Map                      as M
-import           Debug.Trace
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
                                                 )

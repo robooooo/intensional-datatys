@@ -43,7 +43,7 @@ instance Refined Constr where
 
 -- | Combinator for constructing intermediate constraints.
 (?) :: Set (GHC.Name, Int) -> (SetExpr GHC.Name, SetExpr GHC.Name) -> Constr
-g ? (l, r) = (Set.map (uncurry $ Atom Nothing) g, l, r)
+g ? (l, r) = (Set.map (uncurry Atom) g, l, r)
 
 -- | Translate a single constraint to a set of horn clauses, given a set of
 -- constructors for the underlying type @d@.
@@ -56,24 +56,19 @@ toHorn constructors (guards, lefts, rights) = case (lefts, rights) of
 
     (Refined x d1, Refined y d2)
         | d1 == d2 -> Set.map
-            (\k -> mkHornImpl (atomRef k y) $ atomRef k x : toList guards)
+            (\k -> mkHornImpl (Atom k y) $ Atom k x : toList guards)
             constructors
         | otherwise -> error "Ill-defined constraint!"
 
     -- Could check if l <= constructorsOf d?
-    (Constructors span ks, Refined x _d) ->
-        Set.map (\kn -> Horn (Just $ atomCon span x kn) Set.empty) ks
+    (Constructors _span ks, Refined x _d) ->
+        Set.map (\kn -> Horn (Just $ Atom kn x) Set.empty) ks
 
-    (Refined x _d, Constructors span ks) ->
+    (Refined x _d, Constructors _span ks) ->
         let complement = constructors Set.\\ ks
-        in  Set.map (Horn Nothing . Set.singleton . atomCon span x) complement
+        in  Set.map (Horn Nothing . Set.singleton . flip Atom x) complement
 
   where
-    atomCon :: SrcSpan -> RVar -> GHC.Name -> Atom
-    atomCon s x kn = Atom (Just s) kn x
-
-    atomRef :: GHC.Name -> RVar -> Atom
-    atomRef = Atom Nothing
 
     mkHornImpl :: Atom -> [Atom] -> Horn Atom
     mkHornImpl head body = Horn (Just head) (Set.fromList body)
@@ -144,8 +139,7 @@ guardHornWith (groups -> g) = Set.map addConstraint
         g
 
     makeProp :: RVar -> UniqSet GHC.Name -> Set Atom
-    makeProp x ks = Set.map (\kn -> Atom Nothing kn x)
-                            (Set.fromList $ nonDetEltsUniqSet ks)
+    makeProp x ks = Set.map (`Atom` x) (Set.fromList $ nonDetEltsUniqSet ks)
 
 -- | Restrict a set of horn clauses to those containing only certain variables.  
 restrict :: Ord a => Set a -> Set (Horn a) -> Set (Horn a)

@@ -1,8 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
-
 module Intensional
     ( plugin
     ) where
@@ -14,11 +9,11 @@ import           Data.Bifunctor                 ( first )
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
 import           Data.Map                       ( Map )
+import qualified Data.Set                      as Set
 import           Display
 import           GhcPlugins
 import           IfaceEnv
 import           IfaceSyn
-import           Intensional.Constraints
 import qualified Intensional.Horn.InferCoreExpr
                                                as Horn
 import qualified Intensional.Horn.Monad        as Horn
@@ -27,8 +22,6 @@ import           Intensional.InferM
 import qualified Intensional.InferM            as Sets
 import           Intensional.Scheme
 import           Intensional.Types
-import           Lens.Micro
-import           Lens.Micro.Extras
 import           NameCache                      ( OrigNameCache )
 import           OccName
 import           Pretty                         ( Mode(..) )
@@ -70,6 +63,11 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
     dflags <- getDynFlags
 
     let useSetConstrs = False
+        printErrLn    = printSDocLn
+            PageMode
+            dflags
+            stderr
+            (setStyleColoured True $ defaultErrStyle dflags)
     -- Reload saved typeschemes
     envHorn <- reloadSaved "Horn"
     envSets <- reloadSaved "Set"
@@ -86,13 +84,6 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                 (moduleNameString (moduleName m))
                 (t0, t1)
                 stats
-
-            -- Display type errors
-            let printErrLn = printSDocLn
-                    PageMode
-                    dflags
-                    stderr
-                    (setStyleColoured True $ defaultErrStyle dflags)
 
             forM_ (makeSetErrors errs)
                 $ \a -> when (m == mName a) (printErrLn $ showTypeError a)
@@ -114,13 +105,8 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                 (t0, t1)
                 stats
 
-            -- Display type errors
-            let printErrLn = printSDocLn
-                    PageMode
-                    dflags
-                    stderr
-                    (setStyleColoured True $ defaultErrStyle dflags)
-
+            printErrLn $ text
+                ("There are " ++ show (Set.size errs) ++ " error(s).")
             forM_ (makeHornErrors errs)
                 $ \a -> when (m == mName a) (printErrLn $ showTypeError a)
 

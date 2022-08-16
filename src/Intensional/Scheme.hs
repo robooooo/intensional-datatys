@@ -11,7 +11,6 @@ module Intensional.Scheme
     , mono
     , Intensional.Scheme.unsats
     , Atom(..)
-    , _span
     , _name
     , _rvar
     , HornConstraint(..)
@@ -20,7 +19,6 @@ module Intensional.Scheme
     ) where
 
 import           Binary
-import qualified Data.IntMap                   as IntMap
 import qualified Data.IntSet                   as I
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
@@ -43,12 +41,11 @@ import           Lens.Micro.TH                  ( makeLensesFor )
 -- Pair of a constructor and a refinement variable.
 -- May also include a @SrcSpan@.
 data Atom = Atom
-    { atomSpan :: Maybe SrcSpan
-    , atomName :: GHC.Name
+    { atomName :: GHC.Name
     , atomRVar :: RVar
     }
 makeLensesFor
-    [("atomSpan", "_span"), ("atomName", "_name"), ("atomRVar", "_rvar")]
+    [("atomName", "_name"), ("atomRVar", "_rvar")]
     ''Atom
 
 instance Eq Atom where
@@ -105,8 +102,8 @@ instance (Binary a, Ord a) => Binary (Horn a) where
     get bh = uncurry Horn <$> get bh
 
 instance Binary Atom where
-    put_ bh (Atom src k rv) = put_ bh (src, k, rv)
-    get bh = uncurry3 Atom <$> get bh
+    put_ bh (Atom k rv) = put_ bh (k, rv)
+    get bh = uncurry Atom <$> get bh
 
 instance Binary HornConstraint where
     put_ bh (HornConstraint ci horn) = put_ bh (ci, horn)
@@ -176,10 +173,10 @@ instance Refined a => Refined [a] where
         ]
 
 instance Refined Atom where
-    domain (Atom _ _ x) = I.singleton x
-    rename x y (Atom src k rv) | rv == x   = Atom src k y
-                               | otherwise = Atom src k rv
-    prpr m (Atom _ k x) = hcat [m x, "_", ppr k]
+    domain (Atom _ x) = I.singleton x
+    rename x y (Atom k rv) | rv == x   = Atom k y
+                           | otherwise = Atom k rv
+    prpr m (Atom k x) = hcat [m x, "_", ppr k]
 
 instance (Ord a, Refined a) => Refined (Horn a) where
     domain = I.unions . Set.map domain . variables

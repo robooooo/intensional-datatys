@@ -1,13 +1,10 @@
 {-# LANGUAGE TemplateHaskell, PatternSynonyms #-}
 module Intensional.Horn.Clause where
 
-import           Control.Applicative            ( Applicative(liftA2) )
 import qualified Data.List                     as List
 import           Data.Maybe                     ( isJust )
 import           Data.Set                hiding ( valid )
-import           Debug.Trace                    ( traceId )
 import           Lens.Micro
-import           Lens.Micro.Extras
 import           Lens.Micro.TH                  ( makeLensesFor )
 import           Maybes                         ( fromJust )
 import           Prelude                 hiding ( filter

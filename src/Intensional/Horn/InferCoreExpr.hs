@@ -13,9 +13,6 @@ import qualified Data.IntSet                   as IS
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
-import           Debug.Trace                    ( traceId
-                                                , traceShowId
-                                                )
 import           GhcPlugins              hiding ( (<>)
                                                 , Type
                                                 )

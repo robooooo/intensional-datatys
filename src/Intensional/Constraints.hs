@@ -46,7 +46,6 @@ import qualified Intensional.Guard             as Guard
 import           Intensional.Types
 import           Intensional.Ubiq
 
-import           Debug.Trace
 
 
 {-| 
