@@ -32,6 +32,7 @@ import           Intensional.Ubiq
 import           Lens.Micro
 import           Lens.Micro.Extras
 import           Pair
+import Intensional.Horn.Constraints
 
 -- | Saturate and restrict every element of the @Writer@ environment.
 saturateRestrict :: Refined a => InferM a -> InferM a
@@ -46,7 +47,7 @@ saturateRestrict ma = pass $ do
   where
     satRes ci iface cs =
         let saturated = saturate (Set.map (view _horn) cs)
-            labelled  = Set.map (HornConstraint ci) saturated
+            labelled  = Set.map (HornConstraint Nothing Nothing ci) saturated
         in  Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) labelled
 
 -- Infer constraints for a module

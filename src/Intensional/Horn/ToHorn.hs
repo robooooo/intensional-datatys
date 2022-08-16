@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
-module Intensional.Horn.Constraint where
+module Intensional.Horn.ToHorn where
 import qualified Data.IntSet                   as IS
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
@@ -10,9 +10,9 @@ import           GhcPlugins
 import           Intensional.Constraints
 import           Intensional.Guard              ( Guard(groups) )
 import           Intensional.Horn.Clause
-import           Intensional.Scheme
 import           Intensional.Types
 import           Lens.Micro
+import Intensional.Horn.Constraints
 
 -- | Intermediate representation of set expressions, used for @toHorn@.
 data SetExpr a

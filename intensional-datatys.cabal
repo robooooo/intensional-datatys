@@ -41,7 +41,8 @@ library
       Intensional.Ubiq
       Intensional.Horn.Monad
       Intensional.Horn.Clause
-      Intensional.Horn.Constraint
+      Intensional.Horn.ToHorn
+      Intensional.Horn.Constraints
       Intensional.Horn.InferCoreExpr
       Intensional.Horn.InferCoreSub
   hs-source-dirs:

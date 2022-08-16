@@ -1,28 +1,18 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
 module Intensional.Scheme
     ( Scheme
-    , HornScheme
-    , HornSet
     , SchemeGen(..)
     , pattern Forall
     , mono
     , Intensional.Scheme.unsats
-    , Atom(..)
-    , _name
-    , _rvar
-    , HornConstraint(..)
-    , _cinfo
-    , _horn
     ) where
 
 import           Binary
 import qualified Data.IntSet                   as I
 import           Data.Set                       ( Set )
 import qualified Data.Set                      as Set
-import qualified GHC
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
 import           Intensional.Horn.Clause        ( Horn(..)
@@ -33,37 +23,7 @@ import           Intensional.Horn.Clause        ( Horn(..)
 import           Intensional.Types
 import           Lens.Micro              hiding ( _head )
 import           Lens.Micro.Extras              ( view )
-import           Lens.Micro.TH                  ( makeLensesFor )
 
-
-
--- | The type of propositional atoms.
--- Pair of a constructor and a refinement variable.
--- May also include a @SrcSpan@.
-data Atom = Atom
-    { atomName :: GHC.Name
-    , atomRVar :: RVar
-    }
-makeLensesFor
-    [("atomName", "_name"), ("atomRVar", "_rvar")]
-    ''Atom
-
-instance Eq Atom where
-    a == b = atomName a == atomName b && atomRVar a == atomRVar b
-deriving instance Ord Atom
-
-
-data HornConstraint = HornConstraint
-    { hornConInfo  :: CInfo
-    , hornConInner :: Horn Atom
-    }
-    deriving (Eq, Ord)
-makeLensesFor
-    [("hornConInfo", "_cinfo"), ("hornConInner", "_horn")]
-    ''HornConstraint
-
-type HornSet = Set HornConstraint
-type HornScheme = SchemeGen HornSet TyCon
 
 -- Constrained polymorphic types with type constructors of type @d@.
 -- Underlying constraints are parameterised by a type @con@.
@@ -100,14 +60,6 @@ instance (Binary a, Ord a) => Binary (Set a) where
 instance (Binary a, Ord a) => Binary (Horn a) where
     put_ bh (Horn hhead body) = put_ bh (hhead, body)
     get bh = uncurry Horn <$> get bh
-
-instance Binary Atom where
-    put_ bh (Atom k rv) = put_ bh (k, rv)
-    get bh = uncurry Atom <$> get bh
-
-instance Binary HornConstraint where
-    put_ bh (HornConstraint ci horn) = put_ bh (ci, horn)
-    get bh = uncurry HornConstraint <$> get bh
 
 instance (Refined con, Eq con, Monoid con, Outputable d)
         => Refined (SchemeGen con d) where
@@ -172,11 +124,7 @@ instance Refined a => Refined [a] where
         , brackets (fsep (punctuate comma (prpr m <$> toList xs)))
         ]
 
-instance Refined Atom where
-    domain (Atom _ x) = I.singleton x
-    rename x y (Atom k rv) | rv == x   = Atom k y
-                           | otherwise = Atom k rv
-    prpr m (Atom k x) = hcat [m x, "_", ppr k]
+
 
 instance (Ord a, Refined a) => Refined (Horn a) where
     domain = I.unions . Set.map domain . variables
@@ -192,20 +140,6 @@ instance (Ord a, Refined a) => Refined (Horn a) where
                 else [text "True"]
         in
             hcat $ implBodies ++ [" => ", implHead]
-
-instance Refined HornConstraint where
-    domain = domain . view _horn
-    rename x y = over _horn (rename x y)
-    prpr m hc =
-        let HornConstraint (CInfo prov sspn) horn = hc
-        in  hcat
-                [ "HornConstraint("
-                , hcat ["CInfo(", ppr prov, ", ", ppr sspn, ")"]
-                , ", "
-                , prpr m horn
-                , ")"
-                ]
-
 -- Demand a monomorphic type
 mono :: Monoid con => SchemeGen con d -> TypeGen d
 mono (Forall [] t) = t

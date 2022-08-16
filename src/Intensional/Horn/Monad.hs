@@ -12,7 +12,7 @@ import           GhcPlugins                     ( mkFastString )
 import           Intensional.Constraints hiding ( guardWith )
 import           Intensional.Guard              ( singleton )
 import           Intensional.Horn.Clause
-import           Intensional.Horn.Constraint
+import           Intensional.Horn.ToHorn
 import           Intensional.InferM             ( BaseContext
                                                 , InferEnv(..)
                                                 , InferState(..)
@@ -26,11 +26,11 @@ import           Intensional.InferM             ( BaseContext
                                                 , _rv
                                                 , _stats
                                                 )
-import           Intensional.Scheme
 import           Intensional.Types
 import           Intensional.Ubiq               ( debugTrace )
 import           Lens.Micro
 import           Lens.Micro.Extras
+import Intensional.Horn.Constraints
 
 
 
@@ -95,15 +95,18 @@ branchAny ks (Inj x d) m | typeIsTrivial d = m
 typeIsTrivial :: TyCon -> Bool
 typeIsTrivial tc = length (tyConDataCons tc) == 1
 
-addLabel :: Horn Atom -> InferM HornConstraint
-addLabel horn =
-    HornConstraint <$> (CInfo <$> asks modName <*> asks inferLoc) <*> pure horn
+labelsOf :: Constr -> (Maybe SrcSpan, Maybe SrcSpan)
+labelsOf (_, l, r) = (labels l, labels r)
+  where
+    labels (Constructors sspn _) = Just sspn
+    labels _                     = Nothing
 
-addLabels :: Set (Horn Atom) -> InferM HornSet
-addLabels horns = do
+addLabels
+    :: (Maybe SrcSpan, Maybe SrcSpan) -> Set (Horn Atom) -> InferM HornSet
+addLabels (sl, sr) horns = do
     m <- asks modName
     s <- asks inferLoc
-    return $ Set.map (HornConstraint (CInfo m s)) horns
+    return $ Set.map (HornConstraint sl sr (CInfo m s)) horns
 
 emitDD :: DataType TyCon -> DataType TyCon -> InferM ()
 emitDD (Inj x d) (Inj y _) = unless (typeIsTrivial d) $ do
@@ -114,7 +117,7 @@ emitDD (Inj x d) (Inj y _) = unless (typeIsTrivial d) $ do
 
     debugTrace ("Emit (in ): " ++ traceRefined setsCon)
     debugTrace ("Emit (out): " ++ traceRefined hornCon)
-    (addLabels >=> tell) hornCon
+    (addLabels (labelsOf setsCon) >=> tell) hornCon
 emitDD _ _ = return ()
 
 emitKD :: DataCon -> SrcSpan -> DataType TyCon -> InferM ()
@@ -127,7 +130,7 @@ emitKD k s (Inj x d) = unless (typeIsTrivial d) $ do
 
     debugTrace ("Emit (in ): " ++ traceRefined setsCon)
     debugTrace ("Emit (out): " ++ traceRefined hornCon)
-    (addLabels >=> tell) hornCon
+    (addLabels (labelsOf setsCon) >=> tell) hornCon
 emitKD _ _ _ = return ()
 
 emitDK :: DataType TyCon -> [DataCon] -> SrcSpan -> InferM ()
@@ -141,5 +144,5 @@ emitDK (Inj x d) ks s =
 
         debugTrace ("Emit (in ): " ++ traceRefined setsCon)
         debugTrace ("Emit (out): " ++ traceRefined hornCon)
-        (addLabels >=> tell) hornCon
+        (addLabels (labelsOf setsCon) >=> tell) hornCon
 emitDK _ _ _ = return ()

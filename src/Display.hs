@@ -2,14 +2,18 @@ module Display where
 
 import           Data.Aeson
 import qualified Data.Map                      as Map
+import           Data.Maybe
 import           GHC.Generics                   ( Generic )
 import           GhcPlugins
 import           Intensional.Constraints
 import           Intensional.Constructors
 import           Intensional.InferM
 import           Intensional.Scheme
+import           Lens.Micro
+import           Lens.Micro.Extras
 import           PprColour
 import           System.Directory
+import Intensional.Horn.Constraints
 
 data Benchmark = Benchmark
     { times :: [Integer]
@@ -80,29 +84,17 @@ makeSetErrors = fmap mkErr
                         }
 
 makeHornErrors :: HornSet -> [TypeError SDoc]
-makeHornErrors _ = trace "Displaying horn errors is not implemented!" []
-    -- mkErr hc = do
-    --     hornHead <- view (_horn . _head) hc
-    --     headSpan <- atomSpan hornHead
-    --     -- The body of this horn clause should have one atom with a @SrcSpan@.
-    --     -- This is the left side, whereas the others are any guards.
-    --     let hornBody = view (_horn . _body . to toList) hc
-    --         withSpan = catMaybes
-    --             (hornBody <&> \atom -> case atomSpan atom of
-    --                 Just loc -> Just (loc, atomName atom)
-    --                 Nothing  -> Nothing
-    --             )
-    --     Monad.guard $ (not . List.null) withSpan
-    --     let (leftSpan, leftName) = case withSpan of
-    --             [(ls, ln)] -> (ls, ln)
-    --             _          -> error "More than one atom is has a span!"
-
-    --     return $ TypeError { mName           = view (_cinfo . to prov) hc
-    --                        , mainLoc         = view (_cinfo . to sspn) hc
-    --                        , constructorName = leftName
-    --                        , rightLoc        = headSpan
-    --                        , leftLoc         = leftSpan
-    --                        }
+makeHornErrors = fmap mkErr . toList
+  where
+    mkErr hc =
+        let HornConstraint sl sr (CInfo prov sspn) _ = hc
+            nowhere = UnhelpfulSpan "Nowhere"
+        in  TypeError { mName           = prov
+                      , mainLoc         = sspn
+                      , constructorName = text "???"
+                      , rightLoc        = fromMaybe nowhere sl
+                      , leftLoc         = fromMaybe nowhere sr
+                      }
 
     -- pprName err = err { constructorName = (ppr . constructorName) err }
 

@@ -15,8 +15,8 @@ import           GhcPlugins              hiding ( (<>)
 import           Intensional.FromCore           ( consInstArgs )
 import           Intensional.Guard
 import qualified Intensional.Guard             as Guard
-import           Intensional.Horn.Constraint    ( guardHornWith )
 import           Intensional.Horn.Monad
+import           Intensional.Horn.ToHorn        ( guardHornWith )
 import           Intensional.InferM             ( InferEnv(..)
                                                 , MonadInferState(..)
                                                 )
