@@ -12,6 +12,7 @@ import           GhcPlugins                     ( mkFastString )
 import           Intensional.Constraints hiding ( guardWith )
 import           Intensional.Guard              ( singleton )
 import           Intensional.Horn.Clause
+import           Intensional.Horn.Constraints
 import           Intensional.Horn.ToHorn
 import           Intensional.InferM             ( BaseContext
                                                 , InferEnv(..)
@@ -30,7 +31,6 @@ import           Intensional.Types
 import           Intensional.Ubiq               ( debugTrace )
 import           Lens.Micro
 import           Lens.Micro.Extras
-import Intensional.Horn.Constraints
 
 
 
@@ -102,11 +102,14 @@ labelsOf (_, l, r) = (labels l, labels r)
     labels _                     = Nothing
 
 addLabels
-    :: (Maybe SrcSpan, Maybe SrcSpan) -> Set (Horn Atom) -> InferM HornSet
-addLabels (sl, sr) horns = do
+    :: (Maybe SrcSpan, Maybe SrcSpan)
+    -> Maybe Name
+    -> Set (Horn Atom)
+    -> InferM HornSet
+addLabels (sl, sr) kn horns = do
     m <- asks modName
     s <- asks inferLoc
-    return $ Set.map (HornConstraint sl sr (CInfo m s)) horns
+    return $ Set.map (HornConstraint sl sr kn (CInfo m s)) horns
 
 emitDD :: DataType TyCon -> DataType TyCon -> InferM ()
 emitDD (Inj x d) (Inj y _) = unless (typeIsTrivial d) $ do
@@ -117,7 +120,7 @@ emitDD (Inj x d) (Inj y _) = unless (typeIsTrivial d) $ do
 
     debugTrace ("Emit (in ): " ++ traceRefined setsCon)
     debugTrace ("Emit (out): " ++ traceRefined hornCon)
-    (addLabels (labelsOf setsCon) >=> tell) hornCon
+    (addLabels (labelsOf setsCon) Nothing >=> tell) hornCon
 emitDD _ _ = return ()
 
 emitKD :: DataCon -> SrcSpan -> DataType TyCon -> InferM ()
@@ -130,7 +133,7 @@ emitKD k s (Inj x d) = unless (typeIsTrivial d) $ do
 
     debugTrace ("Emit (in ): " ++ traceRefined setsCon)
     debugTrace ("Emit (out): " ++ traceRefined hornCon)
-    (addLabels (labelsOf setsCon) >=> tell) hornCon
+    (addLabels (labelsOf setsCon) (Just kn) >=> tell) hornCon
 emitKD _ _ _ = return ()
 
 emitDK :: DataType TyCon -> [DataCon] -> SrcSpan -> InferM ()
@@ -144,5 +147,5 @@ emitDK (Inj x d) ks s =
 
         debugTrace ("Emit (in ): " ++ traceRefined setsCon)
         debugTrace ("Emit (out): " ++ traceRefined hornCon)
-        (addLabels (labelsOf setsCon) >=> tell) hornCon
+        (addLabels (labelsOf setsCon) Nothing >=> tell) hornCon
 emitDK _ _ _ = return ()

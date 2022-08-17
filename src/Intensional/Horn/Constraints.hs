@@ -8,6 +8,9 @@ import           Control.Applicative            ( Alternative((<|>)) )
 import           Control.Monad                  ( liftM2 )
 import qualified Data.IntSet                   as I
 import           Data.Set                       ( Set )
+import           Debug.Trace                    ( traceId
+                                                , traceShowId
+                                                )
 import qualified GHC
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
@@ -43,6 +46,7 @@ deriving instance Ord Atom
 data HornConstraint = HornConstraint
     { hornConLeftSpan  :: Maybe SrcSpan
     , hornConRightSpan :: Maybe SrcSpan
+    , hornConKName     :: Maybe Name
     , hornConInfo      :: CInfo
     , hornConInner     :: Horn Atom
     }
@@ -50,6 +54,7 @@ data HornConstraint = HornConstraint
 makeLensesFor
     [ ("hornConLeftSpan", "_lspan")
     , ("hornConRightSpan", "_rspan")
+    , ("hornConKName", "_kname")
     , ("hornConInfo", "_cinfo")
     , ("hornConInner", "_horn")]
     ''HornConstraint
@@ -60,14 +65,12 @@ resolveCons
 resolveCons ci left right = addInfo
     <$> resolve (view _horn left) (view _horn right)
   where
-    addInfo horn = HornConstraint
-        { hornConLeftSpan  = liftM2 combineSrcSpans
-                                    (view _lspan left)
-                                    (view _lspan right)
-        , hornConRightSpan = view _rspan right <|> view _rspan left
-        , hornConInner     = horn
-        , hornConInfo      = ci
-        }
+    addInfo horn = HornConstraint { hornConLeftSpan  = view _lspan left
+                                  , hornConRightSpan = view _rspan right
+                                  , hornConKName     = view _kname left
+                                  , hornConInner     = horn
+                                  , hornConInfo      = ci
+                                  }
 
 saturateCons :: CInfo -> HornSet -> HornSet
 saturateCons ci = saturateUnder (resolveCons ci)
@@ -77,8 +80,9 @@ instance Binary Atom where
     get bh = uncurry Atom <$> get bh
 
 instance Binary HornConstraint where
-    put_ bh (HornConstraint sl sr ci horn) = put_ bh (sl, sr, ci, horn)
-    get bh = HornConstraint <$> get bh <*> get bh <*> get bh <*> get bh
+    put_ bh (HornConstraint sl sr kn ci horn) = put_ bh (sl, sr, kn, ci, horn)
+    get bh =
+        HornConstraint <$> get bh <*> get bh <*> get bh <*> get bh <*> get bh
 
 instance Refined Atom where
     domain (Atom _ x) = I.singleton x
@@ -90,7 +94,7 @@ instance Refined HornConstraint where
     domain = domain . view _horn
     rename x y = over _horn (rename x y)
     prpr m hc =
-        let HornConstraint _ _ (CInfo prov sspn) horn = hc
+        let HornConstraint _ _ _ (CInfo prov sspn) horn = hc
         in  hcat
                 [ "HornConstraint("
                 , hcat ["CInfo(", ppr prov, ", ", ppr sspn, ")"]

@@ -84,13 +84,13 @@ makeHornErrors :: HornSet -> [TypeError SDoc]
 makeHornErrors = fmap mkErr . toList
   where
     mkErr hc =
-        let HornConstraint sl sr (CInfo prov sspn) _ = hc
+        let HornConstraint sl sr kn (CInfo prov sspn) _ = hc
             nowhere = UnhelpfulSpan "Nowhere"
         in  TypeError { mName           = prov
                       , mainLoc         = sspn
-                      , constructorName = text "???"
-                      , rightLoc        = fromMaybe nowhere sl
-                      , leftLoc         = fromMaybe nowhere sr
+                      , constructorName = maybe (text "???") ppr kn
+                      , rightLoc        = fromMaybe nowhere sr
+                      , leftLoc         = fromMaybe nowhere sl
                       }
 
     -- pprName err = err { constructorName = (ppr . constructorName) err }
