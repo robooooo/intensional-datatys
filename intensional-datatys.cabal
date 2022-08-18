@@ -49,6 +49,7 @@ library
       src
   cpp-options:
       -DDEBUG
+      -DSATLOG
   ghc-options:
       -O1
       -Wall

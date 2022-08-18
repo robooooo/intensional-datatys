@@ -4,6 +4,7 @@ module Intensional.Horn.Clause where
 import qualified Data.List                     as List
 import           Data.Maybe                     ( isJust )
 import           Data.Set                hiding ( valid )
+import           Intensional.Ubiq               ( satTrace )
 import           Lens.Micro
 import           Lens.Micro.TH                  ( makeLensesFor )
 import           Maybes                         ( fromJust )
@@ -78,7 +79,11 @@ saturateUnder f initial = go initial initial initial
                     ]
             boundary = mapMaybe (uncurry f) pairs
             next     = union prev boundary
-        in  if prev == next then next else go next prev boundary
+        in  if prev == next
+                then satTrace "Finish." next
+                else satTrace
+                    ("Boundary of size " ++ show (size boundary) ++ ".")
+                    (go next prev boundary)
 
     mapMaybe :: Ord u => (t -> Maybe u) -> Set t -> Set u
     mapMaybe g = map fromJust . filter isJust . map g
