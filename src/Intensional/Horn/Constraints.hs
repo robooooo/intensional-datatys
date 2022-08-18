@@ -4,13 +4,8 @@ module Intensional.Horn.Constraints where
 
 
 import           Binary
-import           Control.Applicative            ( Alternative((<|>)) )
-import           Control.Monad                  ( liftM2 )
 import qualified Data.IntSet                   as I
 import           Data.Set                       ( Set )
-import           Debug.Trace                    ( traceId
-                                                , traceShowId
-                                                )
 import qualified GHC
 import           GhcPlugins
 import           Intensional.Constraints       as Constraints
@@ -31,17 +26,13 @@ data Atom = Atom
     { atomName :: GHC.Name
     , atomRVar :: RVar
     }
+    deriving (Eq, Ord)
 makeLensesFor
     [("atomName", "_name"), ("atomRVar", "_rvar")]
     ''Atom
 
 type HornSet = Set HornConstraint
 type HornScheme = SchemeGen HornSet TyCon
-
-instance Eq Atom where
-    a == b = atomName a == atomName b && atomRVar a == atomRVar b
-deriving instance Ord Atom
-
 
 data HornConstraint = HornConstraint
     { hornConLeftSpan  :: Maybe SrcSpan
@@ -50,7 +41,6 @@ data HornConstraint = HornConstraint
     , hornConInfo      :: CInfo
     , hornConInner     :: Horn Atom
     }
-    deriving (Eq, Ord)
 makeLensesFor
     [ ("hornConLeftSpan", "_lspan")
     , ("hornConRightSpan", "_rspan")
@@ -58,6 +48,18 @@ makeLensesFor
     , ("hornConInfo", "_cinfo")
     , ("hornConInner", "_horn")]
     ''HornConstraint
+
+-- | Used for instances on HornConstraint, to select which fields should be
+-- ignored in @Eq@ and @Ord@ instances.
+hcProj :: HornConstraint -> (Maybe Name, Horn Atom)
+hcProj (HornConstraint _ _ kn _ horn) = (kn, horn)
+
+-- deriving instance Ord HornConstraint
+-- deriving instance Eq HornConstraint
+instance Eq HornConstraint where
+    hca == hcb = hcProj hca == hcProj hcb
+instance Ord HornConstraint where
+    compare hca hcb = compare (hcProj hca) (hcProj hcb)
 
 -- | @resolve@ that propagates @SrcSpan@ and naming information.
 resolveCons
@@ -81,8 +83,8 @@ instance Binary Atom where
 
 instance Binary HornConstraint where
     put_ bh (HornConstraint sl sr kn ci horn) = put_ bh (sl, sr, kn, ci, horn)
-    get bh =
-        HornConstraint <$> get bh <*> get bh <*> get bh <*> get bh <*> get bh
+    get bh = uncurry5 HornConstraint <$> get bh
+        where uncurry5 f (a, b, c, d, e) = f a b c d e
 
 instance Refined Atom where
     domain (Atom _ x) = I.singleton x
@@ -94,10 +96,13 @@ instance Refined HornConstraint where
     domain = domain . view _horn
     rename x y = over _horn (rename x y)
     prpr m hc =
-        let HornConstraint _ _ _ (CInfo prov sspn) horn = hc
+        let HornConstraint _ _ kn (CInfo _ sspn) horn = hc
         in  hcat
-                [ "HornConstraint("
-                , hcat ["CInfo(", ppr prov, ", ", ppr sspn, ")"]
+                [ "HornConstraint(loc: "
+                , ppr sspn
+                , ", "
+                , "kn: "
+                , ppr kn
                 , ", "
                 , prpr m horn
                 , ")"

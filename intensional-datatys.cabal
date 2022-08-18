@@ -48,8 +48,9 @@ library
   hs-source-dirs:
       src
   cpp-options:
-    --   -DDEBUG
+      -DDEBUG
   ghc-options:
+      -O1
       -Wall
       -Wcompat
       -Wincomplete-record-updates
@@ -72,6 +73,7 @@ library
       , haskeline >= 0.7.5 && < 0.8
   default-language: Haskell2010
   default-extensions:
+      StrictData
       FlexibleInstances
       LambdaCase
       MultiWayIf
@@ -102,7 +104,7 @@ test-suite test
   hs-source-dirs:
       test
   ghc-options: 
-      -g 
+      -g
       -fno-pre-inlining 
       -funfolding-use-threshold=0 
       -fno-ignore-interface-pragmas 
@@ -115,6 +117,7 @@ test-suite test
     , intensional-datatys
   default-language: Haskell2010
   default-extensions:
+      StrictData
       FlexibleInstances
       LambdaCase
       MultiWayIf
@@ -161,6 +164,7 @@ library benchmark
       benchmark
   default-language: Haskell2010
   default-extensions:
+      StrictData
       FlexibleInstances
       LambdaCase
       MultiWayIf
@@ -203,6 +207,7 @@ executable profile
   main-is: Profile.hs
   default-language: Haskell2010
   default-extensions:
+      StrictData
       FlexibleInstances
       LambdaCase
       MultiWayIf

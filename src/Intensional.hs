@@ -22,6 +22,7 @@ import           Intensional.InferM
 import qualified Intensional.InferM            as Sets
 import           Intensional.Scheme
 import           Intensional.Types
+import           Intensional.Ubiq
 import           NameCache                      ( OrigNameCache )
 import           OccName
 import           Pretty                         ( Mode(..) )
@@ -105,8 +106,7 @@ inferGuts cmd guts@ModGuts { mg_deps = d, mg_module = m, mg_binds = p } = do
                 (t0, t1)
                 stats
 
-            printErrLn $ text
-                ("There are " ++ show (Set.size errs) ++ " error(s).")
+            debugTrace ("There are " ++ show (Set.size errs) ++ " error(s).")
             forM_ (makeHornErrors errs)
                 $ \a -> when (m == mName a) (printErrLn $ showTypeError a)
 

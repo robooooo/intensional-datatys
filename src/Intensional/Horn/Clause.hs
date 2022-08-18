@@ -56,9 +56,10 @@ addGuards extra = over _body (`union` extra)
 -- Resolution with the first head @x@ as the resolvent. The second clause must 
 -- contain @x@ in the body.
 resolve :: Ord a => Horn a -> Horn a -> Maybe (Horn a)
-resolve (Horn (Just x) body1) (Horn Nothing body2)
-    | x `elem` body2 = (Just . Horn Nothing . delete x) (body1 `union` body2)
-    | otherwise      = Nothing
+resolve (Horn (Just x) body1) (Horn mayHead body2)
+    | Just x == mayHead = Nothing
+    | x `elem` body2 = (Just . Horn mayHead . delete x) $! (body1 `union` body2)
+    | otherwise = Nothing
 resolve _ _ = Nothing
 
 saturateUnder :: forall a . Ord a => (a -> a -> Maybe a) -> Set a -> Set a

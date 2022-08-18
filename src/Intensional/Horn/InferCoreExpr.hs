@@ -45,8 +45,9 @@ saturateRestrict ma = pass $ do
     -- noteI (IntSet.size interface)
     return (a, satRes (CInfo m src) interface)
   where
-    satRes ci iface cs =
-        Set.filter (\hc -> domain hc `IS.isSubsetOf` iface) (saturateCons ci cs)
+    satRes ci iface cs = Set.filter
+        (\hc -> domain hc `IS.isSubsetOf` iface)
+        (saturateCons ci $! cs)
 
 -- Infer constraints for a module
 inferProg :: CoreProgram -> InferM HornContext
