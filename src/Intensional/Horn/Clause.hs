@@ -1,12 +1,18 @@
 {-# LANGUAGE TemplateHaskell, PatternSynonyms #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant if" #-}
 module Intensional.Horn.Clause where
 
 import           Data.Foldable                  ( find )
 import qualified Data.List                     as List
-import           Data.Maybe                     ( isJust )
+import           Data.Maybe                     ( isJust
+                                                , isNothing
+                                                )
 import           Data.Set                hiding ( valid )
 import           Intensional.Ubiq               ( satTrace )
-import           Lens.Micro
+import           Lens.Micro              hiding ( _head
+                                                , filtered
+                                                )
 import           Lens.Micro.TH                  ( makeLensesFor )
 import           Maybes                         ( fromJust )
 import           Prelude                 hiding ( filter
@@ -16,7 +22,9 @@ import           Prelude                 hiding ( filter
                                                 , null
                                                 )
 
-
+-- | @mapMaybe@ for sets.
+mapMaybe :: Ord u => (t -> Maybe u) -> Set t -> Set u
+mapMaybe g = map fromJust . filter isJust . map g
 
 -- | The type of horn clauses over variables of type a.
 data Horn a = Horn
@@ -45,6 +53,16 @@ variables horn = case horn of
 isTrivial :: Ord a => Horn a -> Bool
 isTrivial (Horn (Just head) body) = head `elem` body
 isTrivial _                       = False
+
+-- | Determine if a horn clause is a contradiction, i.e. is T => F.
+isContra :: Horn a -> Bool
+isContra (Horn head body) = isNothing head && null body
+
+-- | Determine if a horn clause is a unit clause.
+-- If it is, this returns the unit variable.
+getUnit :: Horn a -> Maybe a
+getUnit (Horn (Just head) body) | null body = Just head
+getUnit _ = Nothing
 
 -- | Remove trivial clauses from a set of horn clauses.
 canonicize :: Ord a => Set (Horn a) -> Set (Horn a)
@@ -93,52 +111,46 @@ saturateUnder f initial = go initial initial initial
                     ("Boundary of size " ++ show (size boundary) ++ ".")
                     (go next aub boundary)
 
-    mapMaybe :: Ord u => (t -> Maybe u) -> Set t -> Set u
-    mapMaybe g = map fromJust . filter isJust . map g
+
 
 
 -- | Saturate a conjunctive set of horn clauses under resolution.
 saturate :: forall a . Ord a => Set (Horn a) -> Set (Horn a)
 saturate = saturateUnder resolve
 
--- | Use the generalised resolution rule to remove a variable @x@ from a 
--- conjunctive set of horn clauses.
--- remove :: Ord a => a -> Set (Horn a) -> Set (Horn a)
--- remove x (canonicize -> clauses) =
---     let
---         -- Then we partition into groups based on the membership of @x@.
---         inHead = filter isInHead clauses
---         inBody = filter isInBody clauses
---         inNone = filter (liftA2 (&&) (not . isInHead) (not . isInBody)) clauses
---     in  union inNone . fromList $ do
---             bases <- over _body (x `delete`) <$> toList inBody
---             extra <- view _body <$> toList inHead
---             return $ bases & _body %~ (`union` extra)
---   where
---     isInHead (Horn head _) = Just x == head
---     isInBody (Horn _ body) = x `elem` body
+-- | Enumerate the set of all clauses whose elements are drawn from a set of
+-- interface variables.
+allClauses :: forall a . Ord a => Set a -> Set (Horn a)
+allClauses iface =
+    let someHead = unions (map headIs iface)
+        noneHead = map (Horn Nothing) (powerSet iface)
+    in  noneHead `union` someHead
+  where
+    headIs :: a -> Set (Horn a)
+    headIs i = map (Horn $ Just i) (powerSet $ delete i iface)
 
--- | Saturate a conjunctive set of horn clauses under resolution.
--- saturate :: Ord a => Set (Horn a) -> Set (Horn a)
--- saturate clauses = go (layer clauses) clauses
---   where
---     go curr prev | curr == prev = prev
---                  | otherwise    = go (layer curr) curr
+-- | Determine if a given clause is derivable given a (satisfiable) conjunctive 
+-- set of known clauses.
+-- TODO: Not sure if this implementation is correct. Seems wrong.
+reachable :: Ord a => Set (Horn a) -> Horn a -> Bool
+reachable kb hc = (not . satisfiable) kb && satisfiable (insert hc kb)
 
---     layer clauses' =
---         let vars = unions (map variables clauses')
---             next = unions $ map (`remove` clauses') vars
---         in  clauses' `union` next
-
-
--- | Determine if a conjunctive set of horn clauses is unsatisfiable.
--- TODO: This is done naively, not really utilising the special form of horn
--- clauses, for which satisfiability can be done much more efficently(?).
--- A non-demo version should probably change this, or use an external solver.
--- unsat :: Ord a => Set (Horn a) -> Bool
--- unsat (canonicize -> clauses) =
---     let noFreeVars = foldr (\x acc -> canonicize $ remove x acc)
---                            clauses
---                            (unions $ map variables clauses)
---     -- If clauses is @{}@ (which is @T@) then the expression is sat.
---     in  (not . null) noFreeVars
+-- | Determine if a set of conjunctive horn clauses can be satisfied.
+-- Uses unit propagation.
+satisfiable :: forall a . Ord a => Set (Horn a) -> Bool
+satisfiable (canonicize -> hc) = case propagate hc of
+    _ | any isContra hc -> False
+    Just next           -> satisfiable next
+    Nothing             -> True
+  where
+    -- | Remove an arbitrary unit clause from a set of horn clauses.
+    propagate :: Set (Horn a) -> Maybe (Set (Horn a))
+    propagate kb = do
+        -- Find an arbitrary literal in a unit clause.
+        unit <- lookupMin (mapMaybe getUnit kb)
+        -- Remove all clauses with the unit clause as the head.
+        -- This should be except the unit clause itself, so add it back in.
+        let filtered = filter (\(Horn head _) -> head /= Just unit) kb
+            removed  = insert (Horn (Just unit) empty) filtered
+        -- Remove any instances of the literal in any other clauses' bodies.
+        return $ map (over _body $ delete unit) removed
