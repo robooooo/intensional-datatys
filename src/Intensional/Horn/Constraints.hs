@@ -57,7 +57,7 @@ hcProj (HornConstraint _ _ kn _ horn) = (kn, horn)
 -- deriving instance Ord HornConstraint
 -- deriving instance Eq HornConstraint
 instance Eq HornConstraint where
-    hca == hcb = hcProj hca == hcProj hcb
+    hca == hcb = (==) (hcProj hca) (hcProj hcb)
 instance Ord HornConstraint where
     compare hca hcb = compare (hcProj hca) (hcProj hcb)
 

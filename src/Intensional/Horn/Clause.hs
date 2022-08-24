@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, PatternSynonyms #-}
 module Intensional.Horn.Clause where
 
+import           Data.Foldable                  ( find )
 import qualified Data.List                     as List
 import           Data.Maybe                     ( isJust )
 import           Data.Set                hiding ( valid )
@@ -54,13 +55,16 @@ canonicize = filter (not . isTrivial)
 addGuards :: Ord a => Set a -> Horn a -> Horn a
 addGuards extra = over _body (`union` extra)
 
--- Resolution with the first head @x@ as the resolvent. The second clause must 
+-- | Resolution with the first head @x@ as the resolvent. The second clause must 
 -- contain @x@ in the body.
 resolve :: Ord a => Horn a -> Horn a -> Maybe (Horn a)
 resolve (Horn (Just x) body1) (Horn mayHead body2)
     | Just x == mayHead = Nothing
-    | x `elem` body2 = (Just . Horn mayHead . delete x) $! (body1 `union` body2)
-    | otherwise = Nothing
+    | x `elem` body2    = find (not . isTrivial) (Just resolvent)
+    | otherwise         = Nothing
+  where
+    body      = delete x (body1 `union` body2)
+    resolvent = Horn mayHead body
 resolve _ _ = Nothing
 
 saturateUnder :: forall a . Ord a => (a -> a -> Maybe a) -> Set a -> Set a
@@ -70,20 +74,24 @@ saturateUnder f initial = go initial initial initial
     -- two sets, then recurse by finding any new resolvents that can be
     -- generated from pairs where at least one of the elements is new.
     go :: Set a -> Set a -> Set a -> Set a
-    go prev a b =
-        let pairs =
-                unions
-                    [ cartesianProduct a b
-                    , cartesianProduct b a
-                    , cartesianProduct b b
-                    ]
-            boundary = mapMaybe (uncurry f) pairs
-            next     = union prev boundary
-        in  if prev == next
+    go aub a b =
+        let
+            -- Force the products to fix a space leak.
+            !prods =
+                [ cartesianProduct a b
+                , cartesianProduct b a
+                , cartesianProduct b b
+                ]
+            !pairs    = unions prods
+            !boundary = mapMaybe (uncurry f) pairs
+            -- !boundary = filter (not . isTrivial) boundary'
+            !next     = union aub boundary
+        in
+            if aub == next
                 then satTrace "Finish." next
                 else satTrace
                     ("Boundary of size " ++ show (size boundary) ++ ".")
-                    (go next prev boundary)
+                    (go next aub boundary)
 
     mapMaybe :: Ord u => (t -> Maybe u) -> Set t -> Set u
     mapMaybe g = map fromJust . filter isJust . map g
