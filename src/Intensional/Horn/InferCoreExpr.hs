@@ -10,6 +10,7 @@ import qualified CoreSyn                       as Core
 import           Data.Bifunctor                 ( Bifunctor(bimap) )
 import qualified Data.IntSet                   as I
 import qualified Data.IntSet                   as IS
+import           Data.IntSet                    ( IntSet )
 import qualified Data.List                     as List
 import qualified Data.Map                      as Map
 import qualified Data.Set                      as Set
@@ -30,24 +31,50 @@ import           Intensional.InferM             ( InferEnv(..)
 import           Intensional.Scheme            as Scheme
 import           Intensional.Types
 import           Intensional.Ubiq
-import           Lens.Micro
+import           Lens.Micro              hiding ( at )
 import           Lens.Micro.Extras
 import           Pair
 
--- | Saturate and restrict every element of the @Writer@ environment.
-saturateRestrict :: Refined a => InferM a -> InferM a
-saturateRestrict ma = pass $ do
+inferenceWith
+    :: Refined a
+    => (CInfo -> Domain -> HornSet -> HornSet)
+    -> InferM a
+    -> InferM a
+inferenceWith f ma = pass $ do
     a   <- ma
     env <- asks varEnv
     m   <- asks modName
     src <- asks inferLoc
     let interface = domain a <> domain env
     -- noteI (IntSet.size interface)
-    return (a, satRes (CInfo m src) interface)
+    return (a, f (CInfo m src) interface)
+
+-- | Saturate and restrict every element of the @Writer@ environment.
+saturateRestrict :: Refined a => InferM a -> InferM a
+saturateRestrict = inferenceWith satRes
   where
+    satRes :: CInfo -> IntSet -> HornSet -> HornSet
     satRes ci iface cs = Set.filter
         (\hc -> domain hc `IS.isSubsetOf` iface)
         (saturateCons ci $! cs)
+
+-- | Alternative to @saturateRestrict@ implemented with repeated satisfiablity.
+repeatedSatisify :: Refined a => InferM a -> InferM a
+repeatedSatisify = inferenceWith repSat
+  where
+    repSat :: CInfo -> IntSet -> HornSet -> HornSet
+    repSat ci iface (Set.map (view _horn) -> cs) =
+        let allVars = foldMap variables cs
+            ifaceVars =
+                Set.filter (\(Atom _ rv) -> rv `IS.member` iface) allVars
+            consequences = Set.filter
+                (reachable cs)
+                (allClauses $ trace (show $ Set.size ifaceVars) ifaceVars)
+        in  Set.map (addInfo ci) consequences
+
+    addInfo :: CInfo -> Horn Atom -> HornConstraint
+    addInfo = HornConstraint Nothing Nothing Nothing
+
 
 -- Infer constraints for a module
 inferProg :: CoreProgram -> InferM HornContext
@@ -93,7 +120,7 @@ associate r = setLoc
     satAction :: HornSet -> HornContext -> HornScheme -> InferM HornScheme
     satAction cs env s = do
         -- Attempt to build a model and record counterexamples
-        cs' <- snd <$> listen (saturateRestrict (tell cs >> return s))
+        cs' <- snd <$> listen (repeatedSatisify (tell cs >> return s))
         debugTrace $ "cs' is " ++ showSDocUnsafe (prpr int cs')
         return $ s { boundvs = (domain cs' <> domain s) I.\\ domain env
                    , Scheme.constraints = cs'
@@ -136,7 +163,7 @@ infer (  Core.App e1 (Core.Type e2)) = do
         Forall [] Ambiguous -> return (Forall [] Ambiguous)
         _ -> pprPanic "Type application to monotype!" (ppr (scheme, e2))
 
-infer (Core.App e1 e2) = saturateRestrict
+infer (Core.App e1 e2) = repeatedSatisify
     (infer e1 >>= \case
         Forall as Ambiguous   -> Forall as Ambiguous <$ infer e2
         -- See FromCore 88 for the case when as /= []
@@ -159,11 +186,11 @@ infer (Core.Lam x e)
         putVar (getName x) (Forall [] t1) (infer e) >>= \case
             Forall as t2 -> return $ Forall as (t1 :=> t2)
 
-infer (Core.Let b e) = saturateRestrict $ do
+infer (Core.Let b e) = repeatedSatisify $ do
     ts <- associate b
     putVars ts $ infer e
 
-infer (Core.Case e bind_e core_ret alts) = saturateRestrict $ do
+infer (Core.Case e bind_e core_ret alts) = repeatedSatisify $ do
     -- Fresh return type
     ret <- freshCoreType core_ret
     -- Infer expression on which to pattern match
