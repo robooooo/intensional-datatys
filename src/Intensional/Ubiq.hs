@@ -28,7 +28,6 @@ saturationLogging =
     False
 #endif
 
--- satTrace :: Applicative f => String -> f ()
 satTrace :: String -> p -> p
 satTrace what ret = 
     if saturationLogging 

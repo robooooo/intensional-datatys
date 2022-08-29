@@ -46,6 +46,7 @@ inferenceWith f ma = pass $ do
     m   <- asks modName
     src <- asks inferLoc
     let interface = domain a <> domain env
+    debugTrace $ "iface is " <> show interface
     -- noteI (IntSet.size interface)
     return (a, f (CInfo m src) interface)
 
@@ -64,19 +65,28 @@ repeatedSatisify = inferenceWith repSat
   where
     repSat :: CInfo -> IntSet -> HornSet -> HornSet
     repSat ci iface (Set.map (view _horn) -> cs) =
-        let allVars = foldMap variables cs
+        let
+            allVars = foldMap variables cs
             ifaceVars =
                 Set.filter (\(Atom _ rv) -> rv `IS.member` iface) allVars
-            consequences = Set.filter
-                (reachable cs)
-                (allClauses $ trace (show $ Set.size ifaceVars) ifaceVars)
-        in  Set.map (addInfo ci) consequences
+            debugInfo =
+                "cs of size " ++ show (Set.size cs) ++ "; ifv of size " ++ show
+                    (Set.size ifaceVars)
+            consequences = satTrace debugInfo
+                $ Set.filter (consistent cs) (allClauses ifaceVars)
+        in
+            Set.map (addInfo ci) consequences
 
     addInfo :: CInfo -> Horn Atom -> HornConstraint
     addInfo = HornConstraint Nothing Nothing Nothing
 
 
--- Infer constraints for a module
+-- | TODO: remove. This is only here for testing.
+implementation :: Refined a => InferM a -> InferM a
+implementation = saturateRestrict
+
+
+-- | Infer constraints for a module.
 inferProg :: CoreProgram -> InferM HornContext
 inferProg []       = return Map.empty
 inferProg (r : rs) = do
@@ -120,7 +130,7 @@ associate r = setLoc
     satAction :: HornSet -> HornContext -> HornScheme -> InferM HornScheme
     satAction cs env s = do
         -- Attempt to build a model and record counterexamples
-        cs' <- snd <$> listen (repeatedSatisify (tell cs >> return s))
+        cs' <- snd <$> listen (implementation (tell cs >> return s))
         debugTrace $ "cs' is " ++ showSDocUnsafe (prpr int cs')
         return $ s { boundvs = (domain cs' <> domain s) I.\\ domain env
                    , Scheme.constraints = cs'
@@ -163,7 +173,7 @@ infer (  Core.App e1 (Core.Type e2)) = do
         Forall [] Ambiguous -> return (Forall [] Ambiguous)
         _ -> pprPanic "Type application to monotype!" (ppr (scheme, e2))
 
-infer (Core.App e1 e2) = repeatedSatisify
+infer (Core.App e1 e2) = implementation
     (infer e1 >>= \case
         Forall as Ambiguous   -> Forall as Ambiguous <$ infer e2
         -- See FromCore 88 for the case when as /= []
@@ -186,11 +196,11 @@ infer (Core.Lam x e)
         putVar (getName x) (Forall [] t1) (infer e) >>= \case
             Forall as t2 -> return $ Forall as (t1 :=> t2)
 
-infer (Core.Let b e) = repeatedSatisify $ do
+infer (Core.Let b e) = implementation $ do
     ts <- associate b
     putVars ts $ infer e
 
-infer (Core.Case e bind_e core_ret alts) = repeatedSatisify $ do
+infer (Core.Case e bind_e core_ret alts) = implementation $ do
     -- Fresh return type
     ret <- freshCoreType core_ret
     -- Infer expression on which to pattern match

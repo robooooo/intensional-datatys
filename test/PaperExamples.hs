@@ -29,10 +29,10 @@ data Fm =
 
 distrib xss yss = List.nub [ List.union xs ys | xs <- xss, ys <- yss ]
 
-nnf2dnf (And p q) = distrib (nnf2dnf p) (nnf2dnf q)
-nnf2dnf (Or p q)  = List.union (nnf2dnf p) (nnf2dnf q)
-nnf2dnf (Lit a)   = [[a]]
-nnf2dnf _         = error "Impossible!"
+-- nnf2dnf (And p q) = distrib (nnf2dnf p) (nnf2dnf q)
+-- nnf2dnf (Or p q)  = List.union (nnf2dnf p) (nnf2dnf q)
+-- nnf2dnf (Lit a)   = [[a]]
+-- nnf2dnf _         = error "Impossible!"
 
 -- dnf = nnf2dnf . nnf
 

@@ -85,6 +85,16 @@ resolve (Horn (Just x) body1) (Horn mayHead body2)
     resolvent = Horn mayHead body
 resolve _ _ = Nothing
 
+-- | SLD solution with the first head @x@ as the resolvent. The second clause 
+-- must contain @x@ in the body.
+sld :: Ord a => Horn a -> Horn a -> Maybe (Horn a)
+sld (Horn (Just x) body1) (Horn Nothing body2)
+    | x `elem` body2 = Just (Horn Nothing body)
+    | otherwise      = Nothing
+    where body = delete x (body1 `union` body2)
+sld _ _ = Nothing
+
+
 saturateUnder :: forall a . Ord a => (a -> a -> Maybe a) -> Set a -> Set a
 saturateUnder f initial = go initial initial initial
   where
@@ -112,8 +122,6 @@ saturateUnder f initial = go initial initial initial
                     (go next aub boundary)
 
 
-
-
 -- | Saturate a conjunctive set of horn clauses under resolution.
 saturate :: forall a . Ord a => Set (Horn a) -> Set (Horn a)
 saturate = saturateUnder resolve
@@ -129,28 +137,32 @@ allClauses iface =
     headIs :: a -> Set (Horn a)
     headIs i = map (Horn $ Just i) (powerSet $ delete i iface)
 
--- | Determine if a given clause is derivable given a (satisfiable) conjunctive 
--- set of known clauses.
--- TODO: Not sure if this implementation is correct. Seems wrong.
-reachable :: Ord a => Set (Horn a) -> Horn a -> Bool
-reachable kb hc = (not . satisfiable) kb && satisfiable (insert hc kb)
+-- | Determine if a given clause is consistent with a conjunctive set of known
+-- clauses.
+consistent :: Ord a => Set (Horn a) -> Horn a -> Bool
+consistent kb hc = (not . satisfiable) kb || satisfiable (insert hc kb)
+
 
 -- | Determine if a set of conjunctive horn clauses can be satisfied.
 -- Uses unit propagation.
 satisfiable :: forall a . Ord a => Set (Horn a) -> Bool
-satisfiable (canonicize -> hc) = case propagate hc of
-    _ | any isContra hc -> False
-    Just next           -> satisfiable next
-    Nothing             -> True
+satisfiable (canonicize -> hc) = go hc empty
   where
+    -- | Keeps track of which units have been seen to ensure termination.
+    go :: Set (Horn a) -> Set a -> Bool
+    go kb seen = case propagate seen kb of
+        _ | any isContra kb -> False
+        Just (unit, next)   -> go next (insert unit seen)
+        Nothing             -> True
+
     -- | Remove an arbitrary unit clause from a set of horn clauses.
-    propagate :: Set (Horn a) -> Maybe (Set (Horn a))
-    propagate kb = do
+    propagate :: Set a -> Set (Horn a) -> Maybe (a, Set (Horn a))
+    propagate seen kb = do
         -- Find an arbitrary literal in a unit clause.
-        unit <- lookupMin (mapMaybe getUnit kb)
+        unit <- lookupMax (filter (`notElem` seen) $ mapMaybe getUnit kb)
         -- Remove all clauses with the unit clause as the head.
         -- This should be except the unit clause itself, so add it back in.
         let filtered = filter (\(Horn head _) -> head /= Just unit) kb
             removed  = insert (Horn (Just unit) empty) filtered
         -- Remove any instances of the literal in any other clauses' bodies.
-        return $ map (over _body $ delete unit) removed
+        return (unit, map (over _body $ delete unit) removed)
