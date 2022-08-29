@@ -3,9 +3,14 @@
 {-# HLINT ignore "Redundant if" #-}
 module Intensional.Horn.Clause where
 
+import           Control.Monad.Logic
 import           Data.Foldable                  ( find )
 import qualified Data.List                     as List
-import           Data.Maybe                     ( isJust
+import           Data.Map                       ( Map )
+import qualified Data.Map                      as Map
+import           Data.Maybe                     ( catMaybes
+                                                , fromMaybe
+                                                , isJust
                                                 , isNothing
                                                 )
 import           Data.Set                hiding ( valid )
@@ -166,3 +171,33 @@ satisfiable (canonicize -> hc) = go hc empty
             removed  = insert (Horn (Just unit) empty) filtered
         -- Remove any instances of the literal in any other clauses' bodies.
         return (unit, map (over _body $ delete unit) removed)
+
+
+-- | Determine if a clause is derivable from a conjunctive set of clauses.
+-- Uses a backwards chaining with backtracking approach.
+reachable :: forall a . Ord a => Set (Horn a) -> Horn a -> Bool
+reachable hs (Horn hornHead hornBody) =
+    let kb       = build hs
+        negation = union (maybe empty singleton hornHead) hornBody
+    in  List.null (1 `observeMany` mapM_ (backwards kb) negation)
+  where
+    build :: Set (Horn a) -> Map a (Set (Set a))
+    build = foldr
+        (\x acc -> case x of
+            Horn (Just head) body ->
+                Map.insertWith union head (singleton body) acc
+            Horn Nothing _ -> acc
+        )
+        Map.empty
+
+    -- | Choose an arbitrary implication to prove @a@ with using the logic
+    -- programming monad, and recurse. Backtracking is implemented for us.
+    backwards :: Map a (Set (Set a)) -> a -> Logic ()
+    backwards kb goal = do
+        options <- maybe mzero pure (Map.lookup goal kb)
+        -- If the goal is provable with the empty body, we immediately succeed.
+        if empty `elem` options
+            then pure ()
+            else do
+                nextGoals <- msum (pure <$> toList options)
+                mapM_ (backwards kb) nextGoals

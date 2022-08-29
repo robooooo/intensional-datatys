@@ -73,7 +73,7 @@ repeatedSatisify = inferenceWith repSat
                 "cs of size " ++ show (Set.size cs) ++ "; ifv of size " ++ show
                     (Set.size ifaceVars)
             consequences = satTrace debugInfo
-                $ Set.filter (consistent cs) (allClauses ifaceVars)
+                $ Set.filter (reachable cs) (allClauses ifaceVars)
         in
             Set.map (addInfo ci) consequences
 
@@ -83,7 +83,7 @@ repeatedSatisify = inferenceWith repSat
 
 -- | TODO: remove. This is only here for testing.
 implementation :: Refined a => InferM a -> InferM a
-implementation = saturateRestrict
+implementation = repeatedSatisify
 
 
 -- | Infer constraints for a module.

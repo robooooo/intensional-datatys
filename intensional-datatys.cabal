@@ -63,6 +63,7 @@ library
       , ghc >=8.6.0 && <=8.8.4
       , microlens
       , microlens-th
+      , logict
       , extra >= 1.7.4 && < 1.8
       , containers >= 0.6.2 && < 0.7
       , unordered-containers >= 0.2.11 && < 0.3
@@ -155,6 +156,8 @@ library benchmark
   build-depends:
       base >=4
     , microlens ==0.4.12.0
+    , logict
+
     -- , microlens-th ==0.4.3.10
     , aeson ==1.5.2.0
     , containers ==0.6.2.1
