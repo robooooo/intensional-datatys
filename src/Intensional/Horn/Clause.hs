@@ -177,10 +177,15 @@ satisfiable (canonicize -> hc) = go hc empty
 -- Uses a backwards chaining with backtracking approach.
 reachable :: forall a . Ord a => Set (Horn a) -> Horn a -> Bool
 reachable hs (Horn hornHead hornBody) =
-    let kb       = build hs
-        negation = union (maybe empty singleton hornHead) hornBody
-    in  List.null (1 `observeMany` mapM_ (backwards kb) negation)
+    let kb   = build (hs `union` map (\x -> Horn (Just x) empty) hornBody)
+        head = maybe True provable (backwards kb <$> hornHead)
+        body = provable (mapM_ (backwards kb) hornBody)
+    in  not head && body
   where
+    provable :: Logic () -> Bool
+    provable = not . List.null . observeMany 1
+
+    -- | Build a lookup structure that maps heads to all possible bodies.
     build :: Set (Horn a) -> Map a (Set (Set a))
     build = foldr
         (\x acc -> case x of
